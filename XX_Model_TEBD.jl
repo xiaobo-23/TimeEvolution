@@ -8,7 +8,7 @@ using HDF5
 let 
     N = 200
     cutoff = 1E-10
-    τ = 0.05
+    τ = 0.1
     ttotal = 100.0
 
     # Make an array of "site" indices
@@ -111,7 +111,7 @@ let
     # @show Czz_unequaltime
 
     
-    h5open("Data/XX_Model_TEBD_N$(N)_Time$(ttotal)_tau$(τ)_update.h5", "w") do file
+    h5open("Data/XX_Model_TEBD_N$(N)_Time$(ttotal)_tau$(τ).h5", "w") do file
         write(file, "Psi", ψ)
         write(file, "Czz_unequaltime", Czz_unequaltime)
         write(file, "Czz", Czz)
