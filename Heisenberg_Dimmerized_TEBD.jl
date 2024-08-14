@@ -6,16 +6,16 @@ using ITensors, ITensorMPS
 using HDF5
 
 let 
-    N = 100
+    N = 200
     cutoff = 1E-10
     τ = 0.05
     ttotal = 100.0
 
     
     # Define the dimmerazation parameter 
-    δ  = 0.5
     J₁ = 1.0
     J₂ = 0
+    δ  = 0
 
     # Make an array of "site" indices
     s = siteinds("S=1/2", N; conserve_qns=true)
@@ -107,15 +107,28 @@ let
     Czz₀ = correlation_matrix(ψ, "Sz", "Sz"; sites = 50 : 51)
     @show Sz₀
     @show Czz₀
-    
+
+
+
+
+    # 08/14/2024
+    # Apply two perturbations to restore the translational invariance of the system in the existence of the dimmerized interactions
+    # Assuming the number of sites is even
     center = div(N, 2)
+    center_odd = center - 1
+    @show center, center_odd
+    ψ_odd = deepcopy(ψ)
     ψ_copy = deepcopy(ψ)
-    
-    
-    # Apply a local operator Sz to the center of the chain
+
+
+    # Apply a local operator Sz to the two sites at the center of the chain
     local_op = op("Sz", s[center])
     ψ = apply(local_op, ψ; cutoff)  
     # normalize!(ψ)
+
+    local_operator_odd = op("Sz", s[center_odd])
+    ψ_odd = apply(local_operator_odd, ψ_odd; cutoff)
+    # normalize!(ψ_odd)
 
     # local_op = op("Sz", s[center])
     # @show typeof(local_op)
@@ -129,18 +142,24 @@ let
     # ψ = apply(local_op, ψ; cutoff)
     # normalize!(ψ)
    
+    
+    # 08/14/2024
+    # Calculate the physical observables at different time steps
+    # @t=0
     Sz₁ = expect(ψ, "Sz"; sites = 1 : N)
     Czz₁ = correlation_matrix(ψ, "Sz", "Sz"; sites = 1 : N)
     @show Sz₁
     @show Czz₁
 
+    
+    # @t>0
     Czz = Matrix{ComplexF64}(undef, Int(ttotal / τ), N * N)
-    Czz_unequaltime = Matrix{ComplexF64}(undef, Int(ttotal / τ), N)
-    @show size(Czz_unequaltime)
+    Czz_unequaltime_odd  = Matrix{ComplexF64}(undef, Int(ttotal / τ), N) 
+    Czz_unequaltime_even = Matrix{ComplexF64}(undef, Int(ttotal / τ), N)
     chi = Matrix{Float64}(undef, Int(ttotal / τ), N - 1)
-    @show size(chi)
     Sz_all = Matrix{ComplexF64}(undef, Int(ttotal / τ), N)
-
+    @show size(Czz_unequaltime_odd), size(Czz_unequaltime_even), size(chi)
+    
 
     # Time evovle the original and perturbed wave functions
     for t in 0 : τ : ttotal
@@ -150,31 +169,40 @@ let
         println("t = $t, Sz = $Sz")
 
         t ≈ ttotal && break
+        # Time evolve the perturbed wave function with the perturbation applied on the even site in the center of the chain
         ψ = apply(gates, ψ; cutoff)
         normalize!(ψ)
         chi[index, :] = linkdims(ψ)
         @show linkdims(ψ)
 
+        # Time evolve the perturbed wave function with the perturbation applied on the odd site in the center of the chain
+        ψ_odd = apply(gates, ψ_odd; cutoff)
+        normalize!(ψ_odd)
+
+        # Time evolve the original wave function
         ψ_copy = apply(gates, ψ_copy; cutoff)
         normalize!(ψ_copy)
 
         Czz[index, :] = correlation_matrix(ψ, "Sz", "Sz"; sites = 1 : N)
         Sz_all[index, :] = expect(ψ, "Sz"; sites = 1 : N)
 
+        # Calculate the unequaltime correlation function
         for site_index in collect(1 : N)
             tmp_os = OpSum()
             tmp_os += "Sz", site_index
             tmp_MPO = MPO(tmp_os, s)
-            Czz_unequaltime[index, site_index] = inner(ψ_copy', tmp_MPO, ψ)
+            Czz_unequaltime_even[index, site_index] = inner(ψ_copy', tmp_MPO, ψ)
+            Czz_unequaltime_odd[index, site_index] = inner(ψ_copy', tmp_MPO, ψ_odd)
         end
     end
 
     
-    h5open("Data/XX_Dimmerized_TEBD_N$(N)_Delta$(δ)_Time$(ttotal)_tau$(τ).h5", "w") do file
+    h5open("Data/Heisenberg_Dimmerized_TEBD_N$(N)_Delta$(δ)_Time$(ttotal)_tau$(τ).h5", "w") do file
         write(file, "Psi", ψ)
         write(file, "Sz T=0", Sz₀)
         write(file, "Czz T=0", Czz₀)
-        write(file, "Czz_unequaltime", Czz_unequaltime)
+        write(file, "Czz_unequaltime_odd", Czz_unequaltime_odd)
+        write(file, "Czz_unequaltime_even", Czz_unequaltime_even)
         write(file, "Czz", Czz)
         write(file, "Sz", Sz_all)
         write(file, "Bond", chi)
