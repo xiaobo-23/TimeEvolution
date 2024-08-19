@@ -1,11 +1,24 @@
 # 08/02/2024
 # Use time evolving block decimation (TEBD) to simulate the time evolution of a 1D Heisenebrg model.
 
-
-using ITensors, ITensorMPS
+using ITensors #, ITensorMPS
+using LinearAlgebra
+using MKL
 using HDF5
 
+MKL_NUM_THREADS = 12
+OPENBLAS_NUM_THREADS = 12   
+OMP_NUM_THREADS = 12
+
+
+
 let 
+    # Monitor the number of threads used by BLAS and LAPACK
+    @show BLAS.get_config()
+    @show BLAS.get_num_threads()
+
+
+    # Define the parameters for setting up the lattice and time evolution
     N = 200
     cutoff = 1E-10
     τ = 0.05
@@ -14,8 +27,13 @@ let
     
     # Define the dimmerazation parameter 
     J₁ = 1.0
-    J₂ = 0
-    δ  = 0
+    J₂ = 0.4
+    δ  = 0.5
+
+    println("")
+    println("The parameters used in this simulation are:")
+    @show N, cutoff, τ, ttotal, J₁, J₂, δ   
+    println("")
 
     # Make an array of "site" indices
     s = siteinds("S=1/2", N; conserve_qns=true)
@@ -197,11 +215,22 @@ let
     end
 
     
-    h5open("Data/Heisenberg_Dimmerized_TEBD_N$(N)_Delta$(δ)_Time$(ttotal)_tau$(τ).h5", "w") do file
+    h5open("Heisenberg_Dimmerized_TEBD_N$(N)_Time$(ttotal)_Delta$(δ)_J2$(J₂)_tau$(τ).h5", "w") do file
         write(file, "Psi", ψ)
         write(file, "Sz T=0", Sz₀)
         write(file, "Czz T=0", Czz₀)
-        write(file, "Czz_unequaltime_odd", Czz_unequaltime_odd)
+        write(file, "Czz_unequaltime_odd",  Czz_unequaltime_odd)
+        write(file, "Czz_unequaltime_even", Czz_unequaltime_even)
+        write(file, "Czz", Czz)
+        write(file, "Sz", Sz_all)
+        write(file, "Bond", chi)
+    end
+
+    h5open("Data/Heisenberg_Dimmerized_TEBD_N$(N)_Time$(ttotal)_Delta$(δ)_J2$(J₂)_tau$(τ).h5", "w") do file
+        write(file, "Psi", ψ)
+        write(file, "Sz T=0", Sz₀)
+        write(file, "Czz T=0", Czz₀)
+        write(file, "Czz_unequaltime_odd",  Czz_unequaltime_odd)
         write(file, "Czz_unequaltime_even", Czz_unequaltime_even)
         write(file, "Czz", Czz)
         write(file, "Sz", Sz_all)
