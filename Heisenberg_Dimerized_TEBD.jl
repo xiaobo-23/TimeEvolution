@@ -22,13 +22,13 @@ let
     N = 200
     cutoff = 1E-10
     τ = 0.05
-    ttotal = 100.0
+    ttotal = 2.1
 
     
     # Define the dimmerazation parameter 
     J₁ = 1.0
-    J₂ = 0.4
-    δ  = 0.5
+    J₂ = 0.5
+    δ  = 0.2
 
     println("")
     println("The parameters used in this simulation are:")
@@ -176,6 +176,8 @@ let
     Czz_unequaltime_even = Matrix{ComplexF64}(undef, Int(ttotal / τ), N)
     chi = Matrix{Float64}(undef, Int(ttotal / τ), N - 1)
     Sz_all = Matrix{ComplexF64}(undef, Int(ttotal / τ), N)
+    Sz_all_odd = Matrix{ComplexF64}(undef, Int(ttotal / τ), N)
+    Sz_all_even = Matrix{ComplexF64}(undef, Int(ttotal / τ), N)
     @show size(Czz_unequaltime_odd), size(Czz_unequaltime_even), size(chi)
     
 
@@ -203,6 +205,8 @@ let
 
         Czz[index, :] = correlation_matrix(ψ, "Sz", "Sz"; sites = 1 : N)
         Sz_all[index, :] = expect(ψ, "Sz"; sites = 1 : N)
+        Sz_all_odd[index, :] = expect(ψ_odd, "Sz"; sites = 1 : N)
+        Sz_all_even[index, :] = expect(ψ_copy, "Sz"; sites = 1 : N)
 
         # Calculate the unequaltime correlation function
         for site_index in collect(1 : N)
@@ -215,16 +219,16 @@ let
     end
 
     
-    h5open("Heisenberg_Dimmerized_TEBD_N$(N)_Time$(ttotal)_Delta$(δ)_J2$(J₂)_tau$(τ).h5", "w") do file
-        write(file, "Psi", ψ)
-        write(file, "Sz T=0", Sz₀)
-        write(file, "Czz T=0", Czz₀)
-        write(file, "Czz_unequaltime_odd",  Czz_unequaltime_odd)
-        write(file, "Czz_unequaltime_even", Czz_unequaltime_even)
-        write(file, "Czz", Czz)
-        write(file, "Sz", Sz_all)
-        write(file, "Bond", chi)
-    end
+    # h5open("Heisenberg_Dimmerized_TEBD_N$(N)_Time$(ttotal)_Delta$(δ)_J2$(J₂)_tau$(τ).h5", "w") do file
+    #     write(file, "Psi", ψ)
+    #     write(file, "Sz T=0", Sz₀)
+    #     write(file, "Czz T=0", Czz₀)
+    #     write(file, "Czz_unequaltime_odd",  Czz_unequaltime_odd)
+    #     write(file, "Czz_unequaltime_even", Czz_unequaltime_even)
+    #     write(file, "Czz", Czz)
+    #     write(file, "Sz", Sz_all)
+    #     write(file, "Bond", chi)
+    # end
 
     h5open("Data/Heisenberg_Dimmerized_TEBD_N$(N)_Time$(ttotal)_Delta$(δ)_J2$(J₂)_tau$(τ).h5", "w") do file
         write(file, "Psi", ψ)
