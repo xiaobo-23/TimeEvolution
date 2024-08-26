@@ -22,13 +22,13 @@ let
     N = 200
     cutoff = 1E-10
     τ = 0.05
-    ttotal = 2.1
+    ttotal = 0.2
 
     
     # Define the dimmerazation parameter 
     J₁ = 1.0
-    J₂ = 0.5
-    δ  = 0.2
+    J₂ = 0.4
+    δ  = 0.3
 
     println("")
     println("The parameters used in this simulation are:")
@@ -216,26 +216,25 @@ let
             Czz_unequaltime_even[index, site_index] = inner(ψ_copy', tmp_MPO, ψ)
             Czz_unequaltime_odd[index, site_index] = inner(ψ_copy', tmp_MPO, ψ_odd)
         end
+
+        # Create a HDF5 file and save the unequal-time spin correlation to the file at every time step
+        h5open("Data/Heisenberg_Dimmerized_TEBD_N$(N)_Time$(ttotal)_Delta$(δ)_J2$(J₂).h5", "w") do file
+            if haskey(file, "Czz_unequaltime_odd")
+                delete_object(file, "Czz_unequaltime_odd")
+            end
+            write(file, "Czz_unequaltime_odd",  Czz_unequaltime_odd)
+
+            if haskey(file, "Czz_unequaltime_even")
+                delete_object(file, "Czz_unequaltime_even")
+            end
+            write(file, "Czz_unequaltime_even", Czz_unequaltime_even)
+        end
     end
 
-    
-    # h5open("Heisenberg_Dimmerized_TEBD_N$(N)_Time$(ttotal)_Delta$(δ)_J2$(J₂)_tau$(τ).h5", "w") do file
-    #     write(file, "Psi", ψ)
-    #     write(file, "Sz T=0", Sz₀)
-    #     write(file, "Czz T=0", Czz₀)
-    #     write(file, "Czz_unequaltime_odd",  Czz_unequaltime_odd)
-    #     write(file, "Czz_unequaltime_even", Czz_unequaltime_even)
-    #     write(file, "Czz", Czz)
-    #     write(file, "Sz", Sz_all)
-    #     write(file, "Bond", chi)
-    # end
-
-    h5open("Data/Heisenberg_Dimmerized_TEBD_N$(N)_Time$(ttotal)_Delta$(δ)_J2$(J₂)_tau$(τ).h5", "w") do file
+    h5open("Data/Heisenberg_Dimmerized_TEBD_N$(N)_Time$(ttotal)_Delta$(δ)_J2$(J₂).h5", "r+") do file
         write(file, "Psi", ψ)
         write(file, "Sz T=0", Sz₀)
         write(file, "Czz T=0", Czz₀)
-        write(file, "Czz_unequaltime_odd",  Czz_unequaltime_odd)
-        write(file, "Czz_unequaltime_even", Czz_unequaltime_even)
         write(file, "Czz", Czz)
         write(file, "Sz", Sz_all)
         write(file, "Bond", chi)
