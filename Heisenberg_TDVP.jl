@@ -8,7 +8,7 @@ using HDF5
 
 function main()
     n = 200
-    ttotal = 1.0im
+    ttotal = -1.0im
     s = siteinds("S=1/2", n)
 
   
@@ -48,10 +48,11 @@ function main()
     ψ = random_mps(s, "↑"; linkdims=10)
     @show inner(ψ', H, ψ) / inner(ψ, ψ)
   
-    
+
     # Obtain the ground state using DMRG
+    # ϕ0 = random_mps(s, "↑"; linkdims=10)
     e0, ϕ0 = dmrg(H, ψ; nsweeps=10, maxdim=100, cutoff=1e-10)
-    @show inner(ϕ0', H, ϕ0) / inner(ϕ0, ϕ0), e0
+    @show inner(ϕ0', H, ϕ0) / inner(ϕ0, ϕ0)
 
     
     # Apply a local perturbation Sz onto the even site in the center of the chain
@@ -72,7 +73,7 @@ function main()
 
     ϕ = tdvp(
       H,
-      -ttotal,
+      ttotal,
       ϕ0;
     #   time_step=-1.0,
       nsweeps=10,
@@ -90,7 +91,7 @@ function main()
     # Time evolve the wave function perturbed in the center of the chain: odd siteinds
     ϕ_odd_time = tdvp(
       H,
-      -ttotal,
+      ttotal,
       ϕ_odd;
     #   time_step=-1.0,
       nsweeps=10,
@@ -108,9 +109,9 @@ function main()
     # Time evolve the wave fcuntion perturbed in the center of the chain: even site 
     ϕ_even_time = tdvp(
       H,
-      -ttotal,
+      ttotal,
       ϕ_even;
-    #   time_step=-1.0,
+    #.   time_step=-1.0,
       nsweeps=10,
       maxdim=100,
       cutoff=1e-10,
@@ -122,17 +123,35 @@ function main()
     Czz_even = correlation_matrix(ϕ_even_time, "Sz", "Sz"; sites=1:n)
     @show inner(ϕ_even_time', H, ϕ_even_time) / inner(ϕ_even_time, ϕ_even_time)
 
-    e2, ϕ2 = dmrg(H, ψ; nsweeps=10, maxdim=100, cutoff=1e-10)
-    @show inner(ϕ2', H, ϕ2) / inner(ϕ2, ϕ2), e2
-  
+    
+    # Compute unequal-time spin correlation function at the final time
+    Czz_unequaltime_odd  = Matrix{ComplexF64}(undef, 1, n)
+    Czz_unequaltime_even = Matrix{ComplexF64}(undef, 1, n)
+
+    for index in collect(1 : n)
+        tmp_os = OpSum()
+        tmp_os += "Sz", index
+        tmp_MPO = MPO(tmp_os, s)
+        Czz_unequaltime_odd[index]  = inner(ϕ0', tmp_MPO, ϕ_odd_time)
+        Czz_unequaltime_even[index] = inner(ϕ0', tmp_MPO, ϕ_even_time) 
+    end
+
+
+    # # Obtain the ground-state energy through DMRG
+    # e2, ϕ2 = dmrg(H, ψ; nsweeps=10, maxdim=100, cutoff=1e-10)
+    # @show inner(ϕ2', H, ϕ2) / inner(ϕ2, ϕ2), e2
+
+    
     # Save the wave function and observables
-    h5open("Data/Heisenberg_Dimerized_TDVP_N$(n)_Time$(imag(ttotal))_J2$(J2)_Delta$(Δ).h5", "w") do file
+    h5open("Data/Heisenberg_Dimerized_TDVP_N$(n)_Real$(real(ttotal))_Imag$(imag(ttotal))_J2$(J2)_Delta$(Δ).h5", "w") do file
         write(file, "Sz", Sz)
         write(file, "Sz_odd", Sz_odd)
         write(file, "Sz_even", Sz_even)
         write(file, "Czz", Czz)
         write(file, "Czz_odd", Czz_odd)
         write(file, "Czz_even", Czz_even)
+        write(file, "Czz_unequaltime_odd", Czz_unequaltime_odd)
+        write(file, "Czz_unequaltime_even", Czz_unequaltime_even)
     end
 
     return nothing

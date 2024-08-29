@@ -22,13 +22,13 @@ let
     N = 200
     cutoff = 1E-10
     τ = 0.05
-    ttotal = 0.2
+    ttotal = 2.0
 
     
     # Define the dimmerazation parameter 
     J₁ = 1.0
-    J₂ = 0.4
-    δ  = 0.3
+    J₂ = 0.5
+    δ  = 0.2
 
     println("")
     println("The parameters used in this simulation are:")
@@ -110,6 +110,7 @@ let
         os += J₁ * (1 - δ), "Sz", N - 1, "Sz", N
     end
 
+    
     Hamiltonian = MPO(os, s)
     ψ₀ = MPS(s, n -> isodd(n) ? "Up" : "Dn")
     
@@ -121,11 +122,10 @@ let
     # ψ = randomMPS(s, states; linkdims = 10)
     E, ψ = dmrg(Hamiltonian, ψ₀; nsweeps, maxdim, cutoff)
     
-    Sz₀ = expect(ψ, "Sz"; sites = 50 : 51)
-    Czz₀ = correlation_matrix(ψ, "Sz", "Sz"; sites = 50 : 51)
+    Sz₀ = expect(ψ, "Sz"; sites=1:N)
+    Czz₀ = correlation_matrix(ψ, "Sz", "Sz"; sites=1:N)
     @show Sz₀
     @show Czz₀
-
 
 
 
@@ -218,7 +218,7 @@ let
         end
 
         # Create a HDF5 file and save the unequal-time spin correlation to the file at every time step
-        h5open("Data/Heisenberg_Dimmerized_TEBD_N$(N)_Time$(ttotal)_Delta$(δ)_J2$(J₂).h5", "w") do file
+        h5open("Data/Heisenberg_Dimerized_TEBD_N$(N)_Time$(ttotal)_Delta$(δ)_J2$(J₂).h5", "w") do file
             if haskey(file, "Czz_unequaltime_odd")
                 delete_object(file, "Czz_unequaltime_odd")
             end
@@ -231,7 +231,7 @@ let
         end
     end
 
-    h5open("Data/Heisenberg_Dimmerized_TEBD_N$(N)_Time$(ttotal)_Delta$(δ)_J2$(J₂).h5", "r+") do file
+    h5open("Data/Heisenberg_Dimerized_TEBD_N$(N)_Time$(ttotal)_Delta$(δ)_J2$(J₂).h5", "r+") do file
         write(file, "Psi", ψ)
         write(file, "Sz T=0", Sz₀)
         write(file, "Czz T=0", Czz₀)
