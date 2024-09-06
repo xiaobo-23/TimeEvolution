@@ -17,18 +17,16 @@ let
     @show BLAS.get_config()
     @show BLAS.get_num_threads()
 
-
     # Define the parameters for setting up the lattice and time evolution
     N = 200
     cutoff = 1E-10
     τ = 0.05
-    ttotal = 2.0
-
+    ttotal = 1.5
     
     # Define the dimmerazation parameter 
     J₁ = 1.0
     J₂ = 0.5
-    δ  = 0.2
+    δ  = 0.5
 
     println("")
     println("The parameters used in this simulation are:")
@@ -124,9 +122,8 @@ let
     
     Sz₀ = expect(ψ, "Sz"; sites=1:N)
     Czz₀ = correlation_matrix(ψ, "Sz", "Sz"; sites=1:N)
-    @show Sz₀
-    @show Czz₀
-
+    # @show Sz₀
+    # @show Czz₀
 
 
     # 08/14/2024
@@ -143,6 +140,15 @@ let
     local_op = op("Sz", s[center])
     ψ = apply(local_op, ψ; cutoff)  
     # normalize!(ψ)
+
+    # Calculate the physical observables at different time steps
+    # @t=0
+    Sz₁ = expect(ψ, "Sz"; sites = 1 : N)
+    Czz₁ = correlation_matrix(ψ, "Sz", "Sz"; sites = 1 : N)
+    @show Sz₁
+    @show Czz₁
+
+
 
     local_operator_odd = op("Sz", s[center_odd])
     ψ_odd = apply(local_operator_odd, ψ_odd; cutoff)
@@ -163,13 +169,6 @@ let
     
     # 08/14/2024
     # Calculate the physical observables at different time steps
-    # @t=0
-    Sz₁ = expect(ψ, "Sz"; sites = 1 : N)
-    Czz₁ = correlation_matrix(ψ, "Sz", "Sz"; sites = 1 : N)
-    @show Sz₁
-    @show Czz₁
-
-    
     # @t>0
     Czz = Matrix{ComplexF64}(undef, Int(ttotal / τ), N * N)
     Czz_unequaltime_odd  = Matrix{ComplexF64}(undef, Int(ttotal / τ), N) 
@@ -204,9 +203,11 @@ let
         normalize!(ψ_copy)
 
         Czz[index, :] = correlation_matrix(ψ, "Sz", "Sz"; sites = 1 : N)
-        Sz_all[index, :] = expect(ψ, "Sz"; sites = 1 : N)
+        Sz_all[index, :] = expect(ψ_copy, "Sz"; sites = 1 : N)
         Sz_all_odd[index, :] = expect(ψ_odd, "Sz"; sites = 1 : N)
-        Sz_all_even[index, :] = expect(ψ_copy, "Sz"; sites = 1 : N)
+        Sz_all_even[index, :] = expect(ψ, "Sz"; sites = 1 : N)
+        @show Sz_all_odd[index, :]
+        @show expect(ψ_odd, "Sz"; sites = 1 : N)
 
         # Calculate the unequaltime correlation function
         for site_index in collect(1 : N)
@@ -218,7 +219,7 @@ let
         end
 
         # Create a HDF5 file and save the unequal-time spin correlation to the file at every time step
-        h5open("Data/Heisenberg_Dimerized_TEBD_N$(N)_Time$(ttotal)_Delta$(δ)_J2$(J₂).h5", "w") do file
+        h5open("Data/Heisenberg_Dimerized_TEBD_Time$(ttotal)_Delta$(δ)_J2$(J₂).h5", "w") do file
             if haskey(file, "Czz_unequaltime_odd")
                 delete_object(file, "Czz_unequaltime_odd")
             end
@@ -231,12 +232,16 @@ let
         end
     end
 
-    h5open("Data/Heisenberg_Dimerized_TEBD_N$(N)_Time$(ttotal)_Delta$(δ)_J2$(J₂).h5", "r+") do file
+    h5open("Data/Heisenberg_Dimerized_TEBD_Time$(ttotal)_Delta$(δ)_J2$(J₂).h5", "r+") do file
         write(file, "Psi", ψ)
         write(file, "Sz T=0", Sz₀)
         write(file, "Czz T=0", Czz₀)
+        write(file, "Sz Perturbed", Sz₁)
+        write(file, "Czz Perturbed", Czz₁)
         write(file, "Czz", Czz)
         write(file, "Sz", Sz_all)
+        write(file, "Sz Odd", Sz_all_odd)
+        write(file, "Sz Even", Sz_all_even)
         write(file, "Bond", chi)
     end
 

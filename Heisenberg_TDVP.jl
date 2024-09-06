@@ -13,7 +13,8 @@ function main()
 
   
     function heisenberg(n; J1 = 1.0, J2 = 0.5, Δ = 0.2)
-        os = OpSum()
+      @show Δ  
+      os = OpSum()
 
         if !iszero(J1)
             for j in 1:2:(n - 1)
@@ -43,7 +44,7 @@ function main()
   
     J1 = 1.0 
     J2 = 0.5
-    Δ = 0.2
+    Δ = 0.5
     H = MPO(heisenberg(n; J1, J2, Δ), s)
     ψ = random_mps(s, "↑"; linkdims=10)
     @show inner(ψ', H, ψ) / inner(ψ, ψ)
@@ -53,6 +54,8 @@ function main()
     # ϕ0 = random_mps(s, "↑"; linkdims=10)
     e0, ϕ0 = dmrg(H, ψ; nsweeps=10, maxdim=100, cutoff=1e-10)
     @show inner(ϕ0', H, ϕ0) / inner(ϕ0, ϕ0)
+    Sz₀ = expect(ϕ0, "Sz"; sites=1:n)
+    Czz₀ = correlation_matrix(ϕ0, "Sz", "Sz"; sites=1:n)
 
     
     # Apply a local perturbation Sz onto the even site in the center of the chain
@@ -61,6 +64,8 @@ function main()
     local_op = op("Sz", s[center_even])
     ϕ_even = apply(local_op, ϕ_even; cutoff)  
     # normalize!(ϕ_even)
+    Sz₁_even = expect(ϕ_even, "Sz"; sites=1:n)
+    Czz₁_even = correlation_matrix(ϕ_even, "Sz", "Sz"; sites=1:n)
 
 
     # Apply a local perturbation Sz onto the odd site in the center of the chain  
@@ -144,10 +149,14 @@ function main()
     
     # Save the wave function and observables
     h5open("Data/Heisenberg_Dimerized_TDVP_N$(n)_Real$(real(ttotal))_Imag$(imag(ttotal))_J2$(J2)_Delta$(Δ).h5", "w") do file
-        write(file, "Sz", Sz)
+        write(file, "Sz T=0", Sz₀)
+        write(file, "Czz T=0", Czz₀) 
+        # write(file, "Sz", Sz)
+        write(file, "Sz Perturbed", Sz₁_even)
         write(file, "Sz_odd", Sz_odd)
         write(file, "Sz_even", Sz_even)
-        write(file, "Czz", Czz)
+        # write(file, "Czz", Czz)
+        write(file, "Czz Perturbed", Czz₁_even)
         write(file, "Czz_odd", Czz_odd)
         write(file, "Czz_even", Czz_even)
         write(file, "Czz_unequaltime_odd", Czz_unequaltime_odd)
