@@ -1,5 +1,5 @@
 ## 08/23/2024
-## 
+## Implement the time-dependent variational principle (TDVP) algorithm to simulate the time evolution of the 1D J1-J2 Heisenberg model.
 using ITensors
 using ITensors: MPO, OpSum, dmrg, inner, random_mps, siteinds
 using ITensorTDVP: tdvp
@@ -42,6 +42,7 @@ function main()
         return os
     end
   
+    
     J1 = 1.0 
     J2 = 0.5
     Δ = 0.5
@@ -64,8 +65,8 @@ function main()
     local_op = op("Sz", s[center_even])
     ϕ_even = apply(local_op, ϕ_even; cutoff)  
     # normalize!(ϕ_even)
-    Sz₁_even = expect(ϕ_even, "Sz"; sites=1:n)
-    Czz₁_even = correlation_matrix(ϕ_even, "Sz", "Sz"; sites=1:n)
+    # Sz₁_even = expect(ϕ_even, "Sz"; sites=1:n)
+    # Czz₁_even = correlation_matrix(ϕ_even, "Sz", "Sz"; sites=1:n)
 
 
     # Apply a local perturbation Sz onto the odd site in the center of the chain  
@@ -84,12 +85,14 @@ function main()
       nsweeps=10,
       maxdim=100,
       cutoff=1e-10,
+      updater_kwargs=(; tol=1e-5, krylovdim=20),
       normalize=true,
       reverse_step=false,
       outputlevel=1,
     )
     Sz = expect(ϕ, "Sz"; sites=1:n)
     Czz = correlation_matrix(ϕ, "Sz", "Sz"; sites=1:n)
+    # normalize!(ϕ)
     @show inner(ϕ', H, ϕ) / inner(ϕ, ϕ)
     
    
@@ -102,6 +105,7 @@ function main()
       nsweeps=10,
       maxdim=100,
       cutoff=1e-10,
+      updater_kwargs=(; tol=1e-5, krylovdim=20),
       normalize=true,
       reverse_step=false,
       outputlevel=1,
@@ -109,8 +113,9 @@ function main()
     Sz_odd = expect(ϕ_odd_time, "Sz"; sites=1:n)
     Czz_odd = correlation_matrix(ϕ_odd_time, "Sz", "Sz"; sites=1:n)
     @show inner(ϕ_odd_time', H, ϕ_odd_time) / inner(ϕ_odd_time, ϕ_odd_time)
+    # normalize!(ϕ_odd_time)
 
-
+    
     # Time evolve the wave fcuntion perturbed in the center of the chain: even site 
     ϕ_even_time = tdvp(
       H,
@@ -120,6 +125,7 @@ function main()
       nsweeps=10,
       maxdim=100,
       cutoff=1e-10,
+      updater_kwargs=(; tol=1e-5, krylovdim=20),
       normalize=true,
       reverse_step=false,
       outputlevel=1,
@@ -127,7 +133,8 @@ function main()
     Sz_even = expect(ϕ_even_time, "Sz"; sites=1:n)
     Czz_even = correlation_matrix(ϕ_even_time, "Sz", "Sz"; sites=1:n)
     @show inner(ϕ_even_time', H, ϕ_even_time) / inner(ϕ_even_time, ϕ_even_time)
-
+    # normalize!(ϕ_even_time)
+    
     
     # Compute unequal-time spin correlation function at the final time
     Czz_unequaltime_odd  = Matrix{ComplexF64}(undef, 1, n)
@@ -137,8 +144,8 @@ function main()
         tmp_os = OpSum()
         tmp_os += "Sz", index
         tmp_MPO = MPO(tmp_os, s)
-        Czz_unequaltime_odd[index]  = inner(ϕ0', tmp_MPO, ϕ_odd_time)
-        Czz_unequaltime_even[index] = inner(ϕ0', tmp_MPO, ϕ_even_time) 
+        Czz_unequaltime_odd[index]  = inner(ϕ', tmp_MPO, ϕ_odd_time)
+        Czz_unequaltime_even[index] = inner(ϕ', tmp_MPO, ϕ_even_time) 
     end
 
 
@@ -148,17 +155,17 @@ function main()
 
     
     # Save the wave function and observables
-    h5open("Data/Heisenberg_Dimerized_TDVP_N$(n)_Real$(real(ttotal))_Imag$(imag(ttotal))_J2$(J2)_Delta$(Δ).h5", "w") do file
+    h5open("Data/TDVP/Heisenberg_Dimerized_TDVP_N$(n)_Real$(real(ttotal))_Imag$(imag(ttotal))_J2$(J2)_Delta$(Δ).h5", "w") do file
         write(file, "Sz T=0", Sz₀)
         write(file, "Czz T=0", Czz₀) 
         # write(file, "Sz", Sz)
-        write(file, "Sz Perturbed", Sz₁_even)
-        write(file, "Sz_odd", Sz_odd)
-        write(file, "Sz_even", Sz_even)
-        # write(file, "Czz", Czz)
-        write(file, "Czz Perturbed", Czz₁_even)
-        write(file, "Czz_odd", Czz_odd)
-        write(file, "Czz_even", Czz_even)
+        # write(file, "Sz Perturbed", Sz₁_even)
+        write(file, "Sz Odd", Sz_odd)
+        write(file, "Sz Even", Sz_even)
+        # write(file, "Czz Perturbed", Czz₁_even)
+        write(file, "Czz", Czz)
+        write(file, "Czz Odd", Czz_odd)
+        write(file, "Czz Even", Czz_even)
         write(file, "Czz_unequaltime_odd", Czz_unequaltime_odd)
         write(file, "Czz_unequaltime_even", Czz_unequaltime_even)
     end

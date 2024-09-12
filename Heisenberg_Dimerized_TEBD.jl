@@ -1,7 +1,8 @@
 # 08/02/2024
-# Use time evolving block decimation (TEBD) to simulate the time evolution of a 1D Heisenebrg model.
+# Use time evolving block decimation (TEBD) to simulate the time evolution of the 1D J1-J2 Heisenberg model.    
 
-using ITensors #, ITensorMPS
+using ITensors 
+using ITensorMPS
 using LinearAlgebra
 using MKL
 using HDF5
@@ -9,7 +10,6 @@ using HDF5
 MKL_NUM_THREADS = 12
 OPENBLAS_NUM_THREADS = 12   
 OMP_NUM_THREADS = 12
-
 
 
 let 
@@ -21,7 +21,7 @@ let
     N = 200
     cutoff = 1E-10
     τ = 0.05
-    ttotal = 1.5
+    ttotal = 2.0
     
     # Define the dimmerazation parameter 
     J₁ = 1.0
@@ -171,6 +171,8 @@ let
     # Calculate the physical observables at different time steps
     # @t>0
     Czz = Matrix{ComplexF64}(undef, Int(ttotal / τ), N * N)
+    Czz_odd = Matrix{ComplexF64}(undef, Int(ttotal / τ), N * N)
+    Czz_even = Matrix{ComplexF64}(undef, Int(ttotal / τ), N * N)
     Czz_unequaltime_odd  = Matrix{ComplexF64}(undef, Int(ttotal / τ), N) 
     Czz_unequaltime_even = Matrix{ComplexF64}(undef, Int(ttotal / τ), N)
     chi = Matrix{Float64}(undef, Int(ttotal / τ), N - 1)
@@ -203,11 +205,12 @@ let
         normalize!(ψ_copy)
 
         Czz[index, :] = correlation_matrix(ψ, "Sz", "Sz"; sites = 1 : N)
+        Czz_odd[index, :] = correlation_matrix(ψ_odd, "Sz", "Sz"; sites = 1 : N)    
+        Czz_even[index, :] = correlation_matrix(ψ_copy, "Sz", "Sz"; sites = 1 : N)  
         Sz_all[index, :] = expect(ψ_copy, "Sz"; sites = 1 : N)
-        Sz_all_odd[index, :] = expect(ψ_odd, "Sz"; sites = 1 : N)
+        Sz_all_odd[index, :] = expect(ψ_odd, "Sz"; sites = 1 : N); @show expect(ψ_odd, "Sz"; sites = 1 : N)
         Sz_all_even[index, :] = expect(ψ, "Sz"; sites = 1 : N)
-        @show Sz_all_odd[index, :]
-        @show expect(ψ_odd, "Sz"; sites = 1 : N)
+
 
         # Calculate the unequaltime correlation function
         for site_index in collect(1 : N)
@@ -219,7 +222,7 @@ let
         end
 
         # Create a HDF5 file and save the unequal-time spin correlation to the file at every time step
-        h5open("Data/Heisenberg_Dimerized_TEBD_Time$(ttotal)_Delta$(δ)_J2$(J₂).h5", "w") do file
+        h5open("Data/TDVP/Heisenberg_Dimerized_TEBD_Time$(ttotal)_Delta$(δ)_J2$(J₂).h5", "w") do file
             if haskey(file, "Czz_unequaltime_odd")
                 delete_object(file, "Czz_unequaltime_odd")
             end
@@ -232,13 +235,15 @@ let
         end
     end
 
-    h5open("Data/Heisenberg_Dimerized_TEBD_Time$(ttotal)_Delta$(δ)_J2$(J₂).h5", "r+") do file
+    h5open("Data/TDVP/Heisenberg_Dimerized_TEBD_Time$(ttotal)_Delta$(δ)_J2$(J₂).h5", "r+") do file
         write(file, "Psi", ψ)
         write(file, "Sz T=0", Sz₀)
         write(file, "Czz T=0", Czz₀)
         write(file, "Sz Perturbed", Sz₁)
         write(file, "Czz Perturbed", Czz₁)
         write(file, "Czz", Czz)
+        write(file, "Czz Odd", Czz_odd) 
+        write(file, "Czz Even", Czz_even)
         write(file, "Sz", Sz_all)
         write(file, "Sz Odd", Sz_all_odd)
         write(file, "Sz Even", Sz_all_even)
