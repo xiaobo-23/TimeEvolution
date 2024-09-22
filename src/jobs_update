@@ -1,0 +1,31 @@
+#!/bin/bash
+
+mkdir data
+
+
+for tmpJ2 in $(seq 0.05  0.05  0.55)
+do
+    mkdir j$tmpJ2
+    cd j$tmpJ2
+        for tmpDelta in $(seq 0.02  0.02  0.22)
+        do
+            mkdir delta$tmpDelta
+            cd delta$tmpDelta
+                cp ../../Heisenberg_Dimerized_TEBD.jl Heisenberg_Dimerized_TEBD.jl
+                # Linux version
+                sed -i "s/J2=0.0/J2=$tmpJ2/g" Heisenberg_Dimerized_TEBD.jl
+                sed -i "s/delta=0.0/delta=$tmpDelta/g" Heisenberg_Dimerized_TEBD.jl
+                
+                # # MacOS version
+                # sed -i "" "s/J2=0.0/J2=$tmpJ2/g" Heisenberg_Dimerized_TEBD.jl
+                # sed -i "" "s/delta=0.0/delta=$tmpDelta/g" Heisenberg_Dimerized_TEBD.jl
+            cd ..  
+        done
+    cd ..
+done
+
+# Generate the input file to use disBatch
+python3 Generate_disBatch_Input_File.py 
+    
+# Job submission on rusty
+sbatch -n 141 -c 8 -t 7-0:0:0 -p ccq --constraint=rome disBatch heisenberg
