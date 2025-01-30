@@ -86,7 +86,7 @@ let
     # append!(gates, reverse(gates))
 
     # Set up the random number generator to guarantee reproducibility   
-    Random.seed!(3000)
+    Random.seed!(4000)
 
     # Run DMRG simulation to obtain the ground-state wave function
     os = OpSum()
@@ -94,9 +94,9 @@ let
         effectiveJ = J1 * rand(Float64)
         @show index, effectiveJ
         # Construct the Hamiltonian for the Hewisenberg model with disorders.
-        os += J1, "Sz", index, "Sz", index + 1
-        os += 1/2 * J1, "S+", index, "S-", index + 1
-        os += 1/2 * J1, "S-", index, "S+", index + 1
+        os += effectiveJ, "Sz", index, "Sz", index + 1
+        os += 1/2 * effectiveJ, "S+", index, "S-", index + 1
+        os += 1/2 * effectiveJ, "S-", index, "S+", index + 1
     end
 
     Hamiltonian = MPO(os, s)
@@ -120,7 +120,7 @@ let
     SvN = entanglement_entropy(ψ, N)
     @show SvN
 
-    h5open("data/heisenberg_uniform_disorder_v3.h5", "w") do file
+    h5open("data/heisenberg_uniform_disorder_v4.h5", "w") do file
         write(file, "Psi", ψ)
         write(file, "Sz T=0", Sz₀)
         write(file, "Czz T=0", Czz₀)
