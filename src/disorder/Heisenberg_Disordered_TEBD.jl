@@ -85,7 +85,9 @@ let
     # # Add reverse gates due to the the symmetric Trotter decomposition
     # append!(gates, reverse(gates))
 
-    
+    # Set up the random number generator to guarantee reproducibility   
+    Random.seed!(3000)
+
     # Run DMRG simulation to obtain the ground-state wave function
     os = OpSum()
     for index = 1 : N - 1
@@ -111,14 +113,18 @@ let
     # Measure physical observables including one-point, two-point functions, and entanglement entropy
     Sz₀ = expect(ψ, "Sz"; sites=1:N)
     Czz₀ = correlation_matrix(ψ, "Sz", "Sz"; sites=1:N)
-    @show Sz₀
-    @show Czz₀[div(N, 2), :]
+    # @show Sz₀
+    # @show Czz₀[div(N, 2), :]
 
+    # Measure the von Neumann entanglement entropy on every single bond
+    SvN = entanglement_entropy(ψ, N)
+    @show SvN
 
-    h5open("data/random_heisenberg_uniform.h5", "w") do file
+    h5open("data/heisenberg_uniform_disorder_v3.h5", "w") do file
         write(file, "Psi", ψ)
         write(file, "Sz T=0", Sz₀)
         write(file, "Czz T=0", Czz₀)
+        write(file, "SvN", SvN)
         # write(file, "Sz Perturbed", Sz₁)
         # write(file, "Czz Perturbed", Czz₁)
         # write(file, "Czz", Czz)

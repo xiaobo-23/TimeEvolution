@@ -3,7 +3,7 @@
 using ITensors
 
 # Measure von Neumann entanglment entropy on a sequence of bonds
-function entanglement_entropy(tmp_ψ :: MPS, length :: Int)
+function entanglement_entropy(tmp_ψ::MPS, length :: Int)
     entropy = Vector{Float64}()
     for site_index in 1 : length - 1 
         orthogonalize!(tmp_ψ, site_index)
@@ -25,7 +25,7 @@ end
 
 
 # Measure von Neumann entanglment entropy on a sequence of bonds
-function entanglement_entropy_bonds(tmp_ψ :: MPS, bonds)
+function entanglement_entropy_bonds(tmp_ψ::MPS, bonds)
     entropy = Vector{Float64}()
     for tmp_bond in bonds
         site_index = tmp_bond.s2
