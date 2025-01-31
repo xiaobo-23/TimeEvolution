@@ -30,7 +30,7 @@ const ttotal = 100.0
 const cutoff = 1E-10
 const J1 = 1.0      # Antiferromagnetic coupling
 const J2 = 0.0      # No next-nearest-neighbor interactions
-const delta = 0.0   # No dimmerization
+const delta = 0.5   # No dimmerization
 
 
 let 
@@ -86,45 +86,75 @@ let
     # append!(gates, reverse(gates))
 
     # Set up the random number generator to guarantee reproducibility   
-    Random.seed!(4000)
+    random_seed=7
+    Random.seed!(random_seed * 1000)
 
     # Run DMRG simulation to obtain the ground-state wave function
+    # os = OpSum()
+    # for index = 1 : N - 1
+    #     effectiveJ = J1 * rand(Float64)
+    #     # effectiveJ = J1
+    #     @show index, effectiveJ
+    #     # Construct the Hamiltonian for the Hewisenberg model with disorders.
+    #     os += effectiveJ, "Sz", index, "Sz", index + 1
+    #     os += 1/2 * effectiveJ, "S+", index, "S-", index + 1
+    #     os += 1/2 * effectiveJ, "S-", index, "S+", index + 1
+    # end
+
+
     os = OpSum()
     for index = 1 : N - 1
-        effectiveJ = J1 * rand(Float64)
-        @show index, effectiveJ
+        random_number = rand(Float64)
+        if random_number < 0.5
+            effectiveJ = J1 * (1 + delta)
+        else
+            effectiveJ = J1 * (1 - delta)
+        end
+        
+        @show index, random_number, effectiveJ
         # Construct the Hamiltonian for the Hewisenberg model with disorders.
         os += effectiveJ, "Sz", index, "Sz", index + 1
         os += 1/2 * effectiveJ, "S+", index, "S-", index + 1
         os += 1/2 * effectiveJ, "S-", index, "S+", index + 1
     end
 
+
     Hamiltonian = MPO(os, s)
     ψ₀ = MPS(s, n -> isodd(n) ? "Up" : "Dn")
     # ψ₀ = randomMPS(s, states; linkdims = 10)
     
+    
     # Tune the parameters used in the DMRG simulation and run the simulation to obtain the ground-state wave function
-    nsweeps = 15
+    nsweeps = 20
+    eigsolve_krylovdim = 25
     maxdim = [20, 50, 200, 2000]
     states = [isodd(n) ? "Up" : "Dn" for n in 1:N]
-    E, ψ = dmrg(Hamiltonian, ψ₀; nsweeps, maxdim, cutoff)
+    E, ψ = dmrg(Hamiltonian, ψ₀; nsweeps, maxdim, cutoff, eigsolve_krylovdim)
     
     
     # Measure physical observables including one-point, two-point functions, and entanglement entropy
     Sz₀ = expect(ψ, "Sz"; sites=1:N)
     Czz₀ = correlation_matrix(ψ, "Sz", "Sz"; sites=1:N)
-    # @show Sz₀
-    # @show Czz₀[div(N, 2), :]
-
+   
     # Measure the von Neumann entanglement entropy on every single bond
     SvN = entanglement_entropy(ψ, N)
     @show SvN
 
-    h5open("data/heisenberg_uniform_disorder_v4.h5", "w") do file
+    # Measure the bond dimension of the MPS
+    chi = linkdims(ψ)
+    @show chi
+    # chi = Vector{Int}(undef, N - 1)
+    # for index = 1 : N - 1
+    #     chi[index] = dim(linkind(ψ, index))
+    # end
+
+    h5open("data/heisenberg_binomial_disorder_v$random_seed.h5", "w") do file
         write(file, "Psi", ψ)
+        write(file, "Energy", E)
         write(file, "Sz T=0", Sz₀)
         write(file, "Czz T=0", Czz₀)
         write(file, "SvN", SvN)
+        write(file, "Bond", chi)
         # write(file, "Sz Perturbed", Sz₁)
         # write(file, "Czz Perturbed", Czz₁)
         # write(file, "Czz", Czz)
@@ -133,7 +163,6 @@ let
         # write(file, "Sz", Sz_all)
         # write(file, "Sz Odd", Sz_all_odd)
         # write(file, "Sz Even", Sz_all_even)
-        # write(file, "Bond", chi)
     end
 
     return
