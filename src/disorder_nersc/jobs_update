@@ -1,0 +1,27 @@
+#!/bin/bash
+
+for index1 in $(seq 1  1  2)
+do
+    mkdir disorder_$index1
+    cd disorder_$index1
+        # cp ../jobs_submission  jobs_submission
+
+        for index2 in $(seq 1  1  16)
+        do
+            # cp ../Heisenberg_Disordered_TEBD.jl  Heisenberg_Disordered_$index2.jl
+            tmp_index=$(((index1 - 1) * 16 + index2))
+            echo $tmp_index
+            
+            # Linux version
+            # sed -i "s/random_seed=0/random_seed=/g" Heisenberg_Disordered_$index2.jl
+            # sed -i "s/delta=0.0/delta=$tmpDelta/g" Heisenberg_Disordered_$index2.jl
+        
+            # # MacOS version
+            # sed -i "" "s/J2=0.0/J2=$tmpJ2/g" Heisenberg_Disordered_$index2.jl
+            # sed -i "" "s/delta=0.0/delta=$tmpDelta/g" Heisenberg_Disordered_$index2.jl
+        done
+
+        # # Job Submission on Perlmutter
+        # sbatch jobs_submission
+    cd ..
+done
