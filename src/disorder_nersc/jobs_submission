@@ -8,18 +8,16 @@
 #SBATCH -J spectracl
 #SBATCH --output=%x.%j.out
 #SBATCH --error=%x.%j.err
-#SBATCH -t 20:00:00
+#SBATCH -t 00:30:00
 
 
 # # Set up the Julia environment
 # module purge; module load julia/1.10.4
 
 
-for J2 in $(seq 0.00  0.05  0.75)
+for index in $(seq 1  1  16)
 do 
-    cd /global/homes/x/xiaobo23/tensor_networks/spectral_function/J1_J2_Dimmerization/Delta0/J2_$J2
-    srun -n 1 julia --threads=1 Heisenberg_Dimerized_TEBD.jl > spectral_J2_$J2.log &
+    srun -n 1 julia --threads=1 Heisenberg_Disordered_$index.jl > Heisenberg_Disordered_$index.log &
 done
-
 
 wait

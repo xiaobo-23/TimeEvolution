@@ -9,7 +9,7 @@ using MKL
 using HDF5
 using Random
 
-include("Entanglement.jl")
+include("../Entanglement.jl")
 
 
 # Because of the competition between BLAS and Strided.jl multithreading, we want to disable Strided.jl multithreading
@@ -148,7 +148,7 @@ let
     #     chi[index] = dim(linkind(ψ, index))
     # end
 
-    h5open("data/heisenberg_binomial_disorder_v$random_seed.h5", "w") do file
+    h5open("../data/heisenberg_uniform_disorder_v$random_seed.h5", "w") do file
         write(file, "Psi", ψ)
         write(file, "Energy", E)
         write(file, "Sz T=0", Sz₀)
