@@ -89,39 +89,61 @@ let
     random_seed=0
     Random.seed!(random_seed * 10 + 123)
 
-    # Run DMRG simulation to obtain the ground-state wave function
+    # Implemnet the J1-J2 Heisenberg model without disorders
     os = OpSum()
-    for index = 1 : N - 1
-        effectiveJ = J1 * rand(Float64)
-        # effectiveJ = J1
-        @show index, effectiveJ
-        # Construct the Hamiltonian for the Hewisenberg model with disorders.
-        os += effectiveJ, "Sz", index, "Sz", index + 1
-        os += 1/2 * effectiveJ, "S+", index, "S-", index + 1
-        os += 1/2 * effectiveJ, "S-", index, "S+", index + 1
+    
+    # Adding pining fields to the left edge to remove the superposition of  degenerate states
+    os += J1 * 1.01, "Sz", 1, "Sz", 2
+    os += 1/2 * J1 * 1.01, "S+", 1, "S-", 2
+    os += 1/2 * J1 * 1.01, "S-", 1, "S+", 2
+
+    for index = 2 : N - 1
+        os += J1, "Sz", index, "Sz", index + 1
+        os += 1/2 * J1, "S+", index, "S-", index + 1
+        os += 1/2 * J1, "S-", index, "S+", index + 1
     end
 
+    for index = 1 : N - 2
+        os += J2, "Sz", index, "Sz", index + 2
+        os += 1/2 * J2, "S+", index, "S-", index + 2
+        os += 1/2 * J2, "S-", index, "S+", index + 2
+    end
 
+    
+    # # Adding uniform disorder to the Heisenberg model
     # os = OpSum()
     # for index = 1 : N - 1
-    #     random_number = rand(Float64)
-    #     if random_number < 0.5
-    #         effectiveJ = J1 * (1 + delta)
-    #     else
-    #         effectiveJ = J1 * (1 - delta)
-    #     end
-        
-    #     @show index, random_number, effectiveJ
-    #     # Construct the Hamiltonian for the Hewisenberg model with disorders.
+    #     effectiveJ = J1 * rand(Float64)
+    #     # effectiveJ = J1
+    #     @show index, effectiveJ
+    #     # Construct the Hamiltonian for the Heisenberg model with disorders.
     #     os += effectiveJ, "Sz", index, "Sz", index + 1
     #     os += 1/2 * effectiveJ, "S+", index, "S-", index + 1
     #     os += 1/2 * effectiveJ, "S-", index, "S+", index + 1
     # end
 
 
+    # # Adding binomial disorder to the Heisenberg model
+    # os = OpSum()
+    # for index = 1 : N - 1
+    #     random_number = rand(Float64)
+    #     if random_number < 0.5
+    #         effectiveJ = J1 * (1 - delta)
+    #     else
+    #         effectiveJ = J1
+    #     end
+        
+    #     @show index, random_number, effectiveJ
+    #     # Construct the Hamiltonian for the Heisenberg model with disorders.
+    #     os += effectiveJ, "Sz", index, "Sz", index + 1
+    #     os += 1/2 * effectiveJ, "S+", index, "S-", index + 1
+    #     os += 1/2 * effectiveJ, "S-", index, "S+", index + 1
+    # end
+
+    # Running the DMRG simulation to obtain the ground-state wave function
     Hamiltonian = MPO(os, s)
-    ψ₀ = MPS(s, n -> isodd(n) ? "Up" : "Dn")
-    # ψ₀ = randomMPS(s, states; linkdims = 10)
+    ψ₀ = randomMPS(s; linkdims = 2)
+    # ψ₀ = MPS(s, n -> isodd(n) ? "Up" : "Dn")
     
     
     # Tune the parameters used in the DMRG simulation and run the simulation to obtain the ground-state wave function
@@ -148,7 +170,7 @@ let
     #     chi[index] = dim(linkind(ψ, index))
     # end
 
-    h5open("../data/heisenberg_uniform_disorder_v$random_seed.h5", "w") do file
+    h5open("../data/heisenberg_binomial_disorder_v$random_seed.h5", "w") do file
         write(file, "Psi", ψ)
         write(file, "Energy", E)
         write(file, "Sz T=0", Sz₀)

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for index1 in $(seq 1  1  6)
+for index1 in $(seq 1  1  5)
 do
     mkdir disorder_$index1
     cd disorder_$index1
