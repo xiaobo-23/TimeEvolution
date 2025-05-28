@@ -171,7 +171,7 @@ let
     #********************************************************************************************************************************************************************
     #********************************************************************************************************************************************************************
 
-    
+
     # Initialize arrays to store the physical observables at each step
     nsteps = Int(round(ttotal / τ)) + 1
     Czz               = zeros(ComplexF64, nsteps, N * N)
@@ -190,73 +190,72 @@ let
         size_chi = size(chi)
     
 
-    # # Time evovle the original and perturbed wave functions
-    # for t in 0 : τ : ttotal
-    #     index = round(Int, t / τ) + 1
-    #     @show index
-    #     Sz = expect(ψ, "Sz"; sites = center)
-    #     println("t = $t, Sz = $Sz")
+    # Time evovle the original and perturbed wave functions
+    for t in 0 : τ : ttotal
+        index = round(Int, t / τ) + 1
+        @show index
+        Sz = expect(ψ, "Sz"; sites = center)
+        println("t = $t, Sz = $Sz")
 
-    #     t ≈ ttotal && break
-    #     # Time evolve the perturbed wave function with the perturbation applied on the even site in the center of the chain
-    #     ψ = apply(gates, ψ; cutoff)
-    #     normalize!(ψ)
-    #     chi[index, :] = linkdims(ψ)
-    #     @show linkdims(ψ)
+        t ≈ ttotal && break
+        # Time evolve the perturbed wave function with the perturbation applied on the even site in the center of the chain
+        ψ = apply(gates, ψ; cutoff)
+        normalize!(ψ)
+        chi[index, :] = linkdims(ψ)
+        @show linkdims(ψ)
 
-    #     # Time evolve the perturbed wave function with the perturbation applied on the odd site in the center of the chain
-    #     ψ_odd = apply(gates, ψ_odd; cutoff)
-    #     normalize!(ψ_odd)
+        # Time evolve the perturbed wave function with the perturbation applied on the odd site in the center of the chain
+        ψ_odd = apply(gates, ψ_odd; cutoff)
+        normalize!(ψ_odd)
 
-    #     # Time evolve the original wave function
-    #     ψ_copy = apply(gates, ψ_copy; cutoff)
-    #     normalize!(ψ_copy)
+        # Time evolve the original wave function
+        ψ_copy = apply(gates, ψ_copy; cutoff)
+        normalize!(ψ_copy)
 
-    #     Czz[index, :] = correlation_matrix(ψ, "Sz", "Sz"; sites = 1 : N)
-    #     Czz_odd[index, :] = correlation_matrix(ψ_odd, "Sz", "Sz"; sites = 1 : N)    
-    #     Czz_even[index, :] = correlation_matrix(ψ_copy, "Sz", "Sz"; sites = 1 : N)  
-    #     Sz_all[index, :] = expect(ψ_copy, "Sz"; sites = 1 : N)
-    #     Sz_all_odd[index, :] = expect(ψ_odd, "Sz"; sites = 1 : N); @show expect(ψ_odd, "Sz"; sites = 1 : N)
-    #     Sz_all_even[index, :] = expect(ψ, "Sz"; sites = 1 : N)
+        Czz[index, :] = correlation_matrix(ψ, "Sz", "Sz"; sites = 1 : N)
+        Czz_odd[index, :] = correlation_matrix(ψ_odd, "Sz", "Sz"; sites = 1 : N)    
+        Czz_even[index, :] = correlation_matrix(ψ_copy, "Sz", "Sz"; sites = 1 : N)  
+        Sz_all[index, :] = expect(ψ_copy, "Sz"; sites = 1 : N)
+        Sz_all_odd[index, :] = expect(ψ_odd, "Sz"; sites = 1 : N); @show expect(ψ_odd, "Sz"; sites = 1 : N)
+        Sz_all_even[index, :] = expect(ψ, "Sz"; sites = 1 : N)
 
+        # Calculate the unequaltime correlation function
+        for site_index in collect(1 : N)
+            tmp_os = OpSum()
+            tmp_os += "Sz", site_index
+            tmp_MPO = MPO(tmp_os, s)
+            Czz_unequaltime_even[index, site_index] = inner(ψ_copy', tmp_MPO, ψ)
+            Czz_unequaltime_odd[index, site_index] = inner(ψ_copy', tmp_MPO, ψ_odd)
+        end
 
-    #     # Calculate the unequaltime correlation function
-    #     for site_index in collect(1 : N)
-    #         tmp_os = OpSum()
-    #         tmp_os += "Sz", site_index
-    #         tmp_MPO = MPO(tmp_os, s)
-    #         Czz_unequaltime_even[index, site_index] = inner(ψ_copy', tmp_MPO, ψ)
-    #         Czz_unequaltime_odd[index, site_index] = inner(ψ_copy', tmp_MPO, ψ_odd)
-    #     end
+        # # Create a HDF5 file and save the unequal-time spin correlation to the file at every time step
+        # h5open("Data/TDVP/Heisenberg_Dimerized_TEBD_Time$(ttotal)_Delta$(δ)_J2$(J₂).h5", "w") do file
+        #     if haskey(file, "Czz_unequaltime_odd")
+        #         delete_object(file, "Czz_unequaltime_odd")
+        #     end
+        #     write(file, "Czz_unequaltime_odd",  Czz_unequaltime_odd)
 
-    #     # # Create a HDF5 file and save the unequal-time spin correlation to the file at every time step
-    #     # h5open("Data/TDVP/Heisenberg_Dimerized_TEBD_Time$(ttotal)_Delta$(δ)_J2$(J₂).h5", "w") do file
-    #     #     if haskey(file, "Czz_unequaltime_odd")
-    #     #         delete_object(file, "Czz_unequaltime_odd")
-    #     #     end
-    #     #     write(file, "Czz_unequaltime_odd",  Czz_unequaltime_odd)
+        #     if haskey(file, "Czz_unequaltime_even")
+        #         delete_object(file, "Czz_unequaltime_even")
+        #     end
+        #     write(file, "Czz_unequaltime_even", Czz_unequaltime_even)
+        # end
+    end
 
-    #     #     if haskey(file, "Czz_unequaltime_even")
-    #     #         delete_object(file, "Czz_unequaltime_even")
-    #     #     end
-    #     #     write(file, "Czz_unequaltime_even", Czz_unequaltime_even)
-    #     # end
-    # end
-
-    # h5open("Data/TDVP/Heisenberg_Dimerized_TEBD_Time$(ttotal)_Delta$(δ)_J2$(J₂).h5", "r+") do file
-    #     write(file, "Psi", ψ)
-    #     write(file, "Sz T=0", Sz₀)
-    #     write(file, "Czz T=0", Czz₀)
-    #     write(file, "Sz Perturbed", Sz₁)
-    #     write(file, "Czz Perturbed", Czz₁)
-    #     write(file, "Czz", Czz)
-    #     write(file, "Czz Odd", Czz_odd) 
-    #     write(file, "Czz Even", Czz_even)
-    #     write(file, "Sz", Sz_all)
-    #     write(file, "Sz Odd", Sz_all_odd)
-    #     write(file, "Sz Even", Sz_all_even)
-    #     write(file, "Bond", chi)
-    # end
+    h5open("Data/TDVP/Heisenberg_Dimerized_TEBD_Time$(ttotal)_Delta$(δ)_J2$(J₂).h5", "r+") do file
+        write(file, "Psi", ψ)
+        write(file, "Sz0", Sz₀)
+        write(file, "Czz0", Czz₀)
+        write(file, "Sz Perturbed", Sz₁)
+        write(file, "Czz Perturbed", Czz₁)
+        write(file, "Czz", Czz)
+        write(file, "Czz Odd", Czz_odd) 
+        write(file, "Czz Even", Czz_even)
+        write(file, "Sz", Sz_all)
+        write(file, "Sz Odd", Sz_all_odd)
+        write(file, "Sz Even", Sz_all_even)
+        write(file, "Bond", chi)
+    end
 
     return
 end
