@@ -1,27 +1,27 @@
 # 08/02/2024
-# Use time evolving block decimation (TEBD) to simulate the time evolution of the 1D J1-J2 Heisenberg model.    
-
+# Simulate real-time evolution of the one-dimensional dimerized J1-J2 Heisenberg model using time-evolving block decimation (TEBD)
 using ITensors 
 using ITensorMPS
 using LinearAlgebra
 using MKL
 using HDF5
 
-MKL_NUM_THREADS = 12
-OPENBLAS_NUM_THREADS = 12   
-OMP_NUM_THREADS = 12
+MKL_NUM_THREADS = 8
+OPENBLAS_NUM_THREADS = 8
+OMP_NUM_THREADS = 8
 
 
-let 
-    # Monitor the number of threads used by BLAS and LAPACK
-    @show BLAS.get_config()
-    @show BLAS.get_num_threads()
+let
+    # Display BLAS configuration and number of threads
+    @info "BLAS configuration:" BLAS.get_config()
+    @info "BLAS number of threads:" BLAS.get_num_threads()
+
 
     # Define the parameters for setting up the lattice and time evolution
     N = 200
     cutoff = 1E-10
     τ = 0.05
-    ttotal = 2.0
+    ttotal = 0.1
     
     # Define the dimmerazation parameter 
     J₁ = 1.0
@@ -33,9 +33,9 @@ let
     @show N, cutoff, τ, ttotal, J₁, J₂, δ   
     println("")
 
-    # Make an array of "site" indices
+    # Define the site indices for the spin-1/2 system
     s = siteinds("S=1/2", N; conserve_qns=true)
-
+    
     # Make gates (1, 2), (2, 3), ..., (N-1, N)
     gates = ITensor[]
     for index in 1 : N - 2
@@ -76,55 +76,54 @@ let
     append!(gates, reverse(gates))
 
     
-    # Run DMRG simulation to obtain the ground-state wave function
+    #******************************************************************************************************************************************************************
+    # Compute the ground state of the dimerized Heisenberg model using DMRG
+    #******************************************************************************************************************************************************************
+    # Construct the Hamiltonian for the dimerized Heisenberg model as MPOs
     os = OpSum()
-    for index = 1 : N - 2
-        # Construct the Hamiltonian for the Heisenberg model
-        # Consider the nearest-neighbor dimmerized interactions
-        if index % 2 == 1
-            os += 1/2 * J₁ * (1 + δ), "S+", index, "S-", index + 1
-            os += 1/2 * J₁ * (1 + δ), "S-", index, "S+", index + 1
-            os += J₁ * (1 + δ), "Sz", index, "Sz", index + 1
+    for idx = 1 : N - 2
+        # Construct the nearest-neighbor interactions with dimerization
+        if isodd(idx)
+            coeff_dimer = J₁ * (1 + δ)
         else
-            os += 1/2 * J₁ * (1 - δ), "S+", index, "S-", index + 1
-            os += 1/2 * J₁ * (1 - δ), "S-", index, "S+", index + 1
-            os += J₁ * (1 - δ), "Sz", index, "Sz", index + 1
+            coeff_dimer = J₁ * (1 - δ)
         end
+        os += 0.5 * coeff_dimer, "S+", idx, "S-", idx + 1
+        os += 0.5 * coeff_dimer, "S-", idx, "S+", idx + 1
+        os += coeff_dimer,       "Sz", idx, "Sz", idx + 1
 
-        # Consider the next-nearest-neighbor interactions
-        os += 1/2 * J₂, "S+", index, "S-", index + 2    
-        os += 1/2 * J₂, "S-", index, "S+", index + 2
-        os += J₂, "Sz", index, "Sz", index + 2  
+        # Construct the next-nearest-neighbor interactions
+        os += 0.5 * J₂, "S+", idx, "S-", idx + 2
+        os += 0.5 * J₂, "S-", idx, "S+", idx + 2
+        os += J₂, "Sz", idx, "Sz", idx + 2
     end
 
     # Construct the MPO for the last two sites
-    if (N - 1) % 2 == 1
-        os += 1/2 * J₁ * (1 + δ), "S+", N - 1, "S-", N  
-        os += 1/2 * J₁ * (1 + δ), "S-", N - 1, "S+", N
-        os += J₁ * (1 + δ), "Sz", N - 1, "Sz", N
-    else
-        os += 1/2 * J₁ * (1 - δ), "S+", N - 1, "S-", N  
-        os += 1/2 * J₁ * (1 - δ), "S-", N - 1, "S+", N
-        os += J₁ * (1 - δ), "Sz", N - 1, "Sz", N
-    end
+    coeff_last = J₁ * (isodd(N - 1) ? (1 + δ) : (1 - δ))
+    os += 0.5 * coeff_last, "S+", N - 1, "S-", N
+    os += 0.5 * coeff_last, "S-", N - 1, "S+", N
+    os += coeff_last,       "Sz", N - 1, "Sz", N
 
-    
-    Hamiltonian = MPO(os, s)
+    # states = [isodd(n) ? "Up" : "Dn" for n in 1:N]
+    # ψ = randomMPS(s, states; linkdims = 10)
+
+    # Initialize the MPS as a product state and set up the Hamiltonian as an MPO
     ψ₀ = MPS(s, n -> isodd(n) ? "Up" : "Dn")
+    Hamiltonian = MPO(os, s)
     
-
+    
     # Define parameters that are used in the DMRG optimization process
     nsweeps = 20
     maxdim = [20, 50, 200, 2000]
-    states = [isodd(n) ? "Up" : "Dn" for n in 1:N]
-    # ψ = randomMPS(s, states; linkdims = 10)
     E, ψ = dmrg(Hamiltonian, ψ₀; nsweeps, maxdim, cutoff)
-    
+
+    # Measure physical observables of the ground state
     Sz₀ = expect(ψ, "Sz"; sites=1:N)
     Czz₀ = correlation_matrix(ψ, "Sz", "Sz"; sites=1:N)
     # @show Sz₀
     # @show Czz₀
-
+    #******************************************************************************************************************************************************************
+    #****************************************************************************************************************************************************************** 
 
     # 08/14/2024
     # Apply two perturbations to restore the translational invariance of the system in the existence of the dimmerized interactions
@@ -221,34 +220,34 @@ let
             Czz_unequaltime_odd[index, site_index] = inner(ψ_copy', tmp_MPO, ψ_odd)
         end
 
-        # Create a HDF5 file and save the unequal-time spin correlation to the file at every time step
-        h5open("Data/TDVP/Heisenberg_Dimerized_TEBD_Time$(ttotal)_Delta$(δ)_J2$(J₂).h5", "w") do file
-            if haskey(file, "Czz_unequaltime_odd")
-                delete_object(file, "Czz_unequaltime_odd")
-            end
-            write(file, "Czz_unequaltime_odd",  Czz_unequaltime_odd)
+        # # Create a HDF5 file and save the unequal-time spin correlation to the file at every time step
+        # h5open("Data/TDVP/Heisenberg_Dimerized_TEBD_Time$(ttotal)_Delta$(δ)_J2$(J₂).h5", "w") do file
+        #     if haskey(file, "Czz_unequaltime_odd")
+        #         delete_object(file, "Czz_unequaltime_odd")
+        #     end
+        #     write(file, "Czz_unequaltime_odd",  Czz_unequaltime_odd)
 
-            if haskey(file, "Czz_unequaltime_even")
-                delete_object(file, "Czz_unequaltime_even")
-            end
-            write(file, "Czz_unequaltime_even", Czz_unequaltime_even)
-        end
+        #     if haskey(file, "Czz_unequaltime_even")
+        #         delete_object(file, "Czz_unequaltime_even")
+        #     end
+        #     write(file, "Czz_unequaltime_even", Czz_unequaltime_even)
+        # end
     end
 
-    h5open("Data/TDVP/Heisenberg_Dimerized_TEBD_Time$(ttotal)_Delta$(δ)_J2$(J₂).h5", "r+") do file
-        write(file, "Psi", ψ)
-        write(file, "Sz T=0", Sz₀)
-        write(file, "Czz T=0", Czz₀)
-        write(file, "Sz Perturbed", Sz₁)
-        write(file, "Czz Perturbed", Czz₁)
-        write(file, "Czz", Czz)
-        write(file, "Czz Odd", Czz_odd) 
-        write(file, "Czz Even", Czz_even)
-        write(file, "Sz", Sz_all)
-        write(file, "Sz Odd", Sz_all_odd)
-        write(file, "Sz Even", Sz_all_even)
-        write(file, "Bond", chi)
-    end
+    # h5open("Data/TDVP/Heisenberg_Dimerized_TEBD_Time$(ttotal)_Delta$(δ)_J2$(J₂).h5", "r+") do file
+    #     write(file, "Psi", ψ)
+    #     write(file, "Sz T=0", Sz₀)
+    #     write(file, "Czz T=0", Czz₀)
+    #     write(file, "Sz Perturbed", Sz₁)
+    #     write(file, "Czz Perturbed", Czz₁)
+    #     write(file, "Czz", Czz)
+    #     write(file, "Czz Odd", Czz_odd) 
+    #     write(file, "Czz Even", Czz_even)
+    #     write(file, "Sz", Sz_all)
+    #     write(file, "Sz Odd", Sz_all_odd)
+    #     write(file, "Sz Even", Sz_all_even)
+    #     write(file, "Bond", chi)
+    # end
 
     return
 end
