@@ -26,7 +26,7 @@ OMP_NUM_THREADS = 8
 # Define the parameters used in the simulation
 const N = 200
 const τ = 0.05
-const ttotal = 2.0
+const ttotal = 50.0
 const cutoff = 1E-10
 const J1 = 1.0       # Antiferromagnetic coupling
 const J2 = 0.35      # No next-nearest-neighbor interactions
@@ -42,12 +42,12 @@ let
     println(repeat("#", 100))
     println(repeat("#", 100))
 
-
-    # Set up the random number generator to guarantee reproducibility   
-    # random_seed=23
-    # Random.seed!(random_seed * 1000)
-
     
+    # Set up the random number generator to guarantee reproducibility
+    random_seed=0
+    Random.seed!(random_seed * 1000 + 12345)
+
+
     #*************************************************************************************************************************
     #*************************************************************************************************************************
     # Make an array of "site" indices
@@ -120,8 +120,17 @@ let
     # @show SvN
 
     # Bond dimensions
-    chi = linkdims(ψ)
+    chi₀ = linkdims(ψ)
     # @show chi
+    
+    h5open("data/heisenberg_disorder_N$(N)_version$(random_seed).h5", "w") do file
+        write(file, "Psi", ψ)
+        write(file, "Energy", E)
+        writte(file, "SvN", SvN)
+        write(file, "Bond t=0", chi₀)
+        write(file, "Sz t=0", Sz₀)
+        write(file, "Czz t=0", Czz₀)
+    end
     #*************************************************************************************************************************
     #*************************************************************************************************************************
 
@@ -226,7 +235,6 @@ let
     Czz_odd[1, :] = correlation_matrix(ψ_odd, "Sz", "Sz"; sites = 1 : N)
     Czz_even[1, :] = correlation_matrix(ψ_even, "Sz", "Sz"; sites = 1 : N)
     chi[1, :] = linkdims(ψ)
-    # @show chi[1, :]
     #*************************************************************************************************************************
     #************************************************************************************************************************* 
     
@@ -272,7 +280,7 @@ let
         end
 
         # Create a HDF5 file and save the unequal-time spin correlation to the file at every time step
-        h5open("data/heisenberg_disorder_N$(N)_J2$(J2)_delta$(delta).h5", "w") do file
+        h5open("data/heisenberg_disorder_N$(N)_version$(random_seed).h5", "w") do file
             if haskey(file, "Czz_unequaltime_odd")
                 delete_object(file, "Czz_unequaltime_odd")
             end
@@ -288,9 +296,10 @@ let
     #*************************************************************************************************************************
 
 
-    h5open("data/heisenberg_binomial_disorder_N$(N)_v$(random_seed).h5", "w") do file
+    h5open("data/heisenberg_disorder_N$(N)_version$(random_seed).h5", "w") do file
         write(file, "Psi", ψ)
-        write(file, "Energy", E)
+        write(file, "Psi odd", ψ_odd)
+        write(file, "Psi even", ψ_even)
         write(file, "Bond", chi)
         write(file, "Sz", Sz)
         write(file, "Sz odd", Sz_odd)
