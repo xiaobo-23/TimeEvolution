@@ -9,7 +9,7 @@ using MKL
 using HDF5
 using Random
 
-include("Entanglement.jl")
+include("../Entanglement.jl")
 
 
 # Because of the competition between BLAS and Strided.jl multithreading, we want to disable Strided.jl multithreading
@@ -104,7 +104,7 @@ let
     
     
     # Tune the parameters used in DMRG to obtain the ground-state wave function
-    nsweeps = 2
+    nsweeps = 10
     eigsolve_krylovdim = 50
     maxdim = [20, 50, 200, 2000]
     E, ψ = dmrg(Hamiltonian, ψ₀; nsweeps, maxdim, cutoff, eigsolve_krylovdim)
@@ -123,14 +123,13 @@ let
     chi₀ = linkdims(ψ)
     # @show chi
     
-    h5open("data/heisenberg_disorder_N$(N)_version$(random_seed).h5", "w") do file
+    h5open("/pscratch/sd/x/xiaobo23/TensorNetworks/spectral_function/disorders/Uniform/data/heisenberg_disorder_N$(N)_version$(random_seed).h5", "w") do file
         write(file, "Psi", ψ)
         write(file, "Energy", E)
-        writte(file, "SvN", SvN)
+        write(file, "SvN", SvN)
         write(file, "Bond t=0", chi₀)
         write(file, "Sz t=0", Sz₀)
         write(file, "Czz t=0", Czz₀)
-    end
     #*************************************************************************************************************************
     #*************************************************************************************************************************
 
@@ -279,34 +278,32 @@ let
             Czz_unequaltime_odd[index, site_index] = inner(ψ', tmp_MPO, ψ_odd)
         end
 
-        # Create a HDF5 file and save the unequal-time spin correlation to the file at every time step
-        h5open("data/heisenberg_disorder_N$(N)_version$(random_seed).h5", "w") do file
-            if haskey(file, "Czz_unequaltime_odd")
-                delete_object(file, "Czz_unequaltime_odd")
-            end
-            write(file, "Czz_unequaltime_odd",  Czz_unequaltime_odd)
-
-            if haskey(file, "Czz_unequaltime_even")
-                delete_object(file, "Czz_unequaltime_even")
-            end
-            write(file, "Czz_unequaltime_even", Czz_unequaltime_even)
+        # Save unequal-time spin correlations at each time step 
+        if haskey(file, "Czz_unequaltime_odd")
+            delete_object(file, "Czz_unequaltime_odd")
         end
+        write(file, "Czz_unequaltime_odd",  Czz_unequaltime_odd)
+
+        if haskey(file, "Czz_unequaltime_even")
+            delete_object(file, "Czz_unequaltime_even")
+        end
+        write(file, "Czz_unequaltime_even", Czz_unequaltime_even)
     end
     #*************************************************************************************************************************
     #*************************************************************************************************************************
 
-
-    h5open("data/heisenberg_disorder_N$(N)_version$(random_seed).h5", "w") do file
-        write(file, "Psi", ψ)
-        write(file, "Psi odd", ψ_odd)
-        write(file, "Psi even", ψ_even)
-        write(file, "Bond", chi)
-        write(file, "Sz", Sz)
-        write(file, "Sz odd", Sz_odd)
-        write(file, "Sz even", Sz_even)
-        write(file, "Czz", Czz)
-        write(file, "Czz odd", Czz_odd)
-        write(file, "Czz even", Czz_even)
+    write(file, "Psi", ψ)
+    write(file, "Psi odd", ψ_odd)
+    write(file, "Psi even", ψ_even)
+    write(file, "Bond", chi)
+    write(file, "Sz", Sz)
+    write(file, "Sz odd", Sz_odd)
+    write(file, "Sz even", Sz_even)
+    write(file, "Czz", Czz)
+    write(file, "Czz odd", Czz_odd)
+    write(file, "Czz even", Czz_even)
+    write(file, "Czz_unequaltime_odd",  Czz_unequaltime_odd)
+    write(file, "Czz_unequaltime_even", Czz_unequaltime_even)
     end
 
     return
