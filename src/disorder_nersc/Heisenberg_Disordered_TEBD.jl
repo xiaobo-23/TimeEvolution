@@ -11,17 +11,14 @@ using Random
 
 include("Entanglement.jl")
 
-
 # Because of the competition between BLAS and Strided.jl multithreading, we want to disable Strided.jl multithreading
-MKL_NUM_THREADS = 8
-OPENBLAS_NUM_THREADS = 8  
-OMP_NUM_THREADS = 8
-
+MKL_NUM_THREADS = 4
+OPENBLAS_NUM_THREADS = 4  
+OMP_NUM_THREADS = 4
 
 # Monitor the number of threads used by BLAS and LAPACK
 @show BLAS.get_config()
 @show BLAS.get_num_threads()
-
 
 # Define the parameters used in the simulation
 const N = 100
@@ -34,42 +31,46 @@ const delta = 0.04   # No dimmerization
 const time_steps = Int(ttotal / τ)
 const disorder_percentage=0.1
 
+
 let 
-    println(repeat("#", 100))
-    println(repeat("#", 100))
+    println(repeat("#", 150))
+    println(repeat("#",  150))
     println("Time evolve the J1-J2 Heisenberg model with disorders.")
     println("The parameters used in the simulation are:")
     @show N, cutoff, τ, ttotal, J1, J2, delta   
-    println(repeat("#", 100))
-    println(repeat("#", 100))
-
+   
     
     # Set up the random number generator to guarantee reproducibility
     random_seed=0
-    Random.seed!(random_seed * 1000 + 12345)
+    Random.seed!(random_seed * 10000 + 1234567)
 
     bond_disorders = zeros(Int, Int(disorder_percentage * N))
     idx=1
     while idx <= length(bond_disorders)
         random_number = rand(1 : N-1)
         if random_number != 0 && random_number != N && !(random_number in bond_disorders)
-            @show random_number
+            # @show random_number
             bond_disorders[idx] = random_number
             idx += 1
         end
     end
-    println("The bonds with disorders are: ")
-    @show sort(bond_disorders)
     println("")
-
+    println("The bonds with disorders are: ")
+    @show bond_disorders
+    println(repeat("#", 150))
+    println(repeat("#", 150))
+    println("")
+    
+    
     #*************************************************************************************************************************
     #*************************************************************************************************************************
     # Make an array of "site" indices
     s = siteinds("S=1/2", N; conserve_qns=true)
-    # random_numbers = [rand(Float64) for _ in 1:N-1]
 
-        
     # Set up nearest-neighbor interactions with disorders
+    println(repeat("#", 150))
+    println(repeat("#", 150))
+    println("Distribution of bond disorders in setting up the Hamiltonian:")
     os = OpSum()
     bonds_with_disorders = 0
     for index in 1 : N - 1
@@ -91,10 +92,8 @@ let
         os += 1/2 * effectiveJ, "S+", index, "S-", index + 1
         os += 1/2 * effectiveJ, "S-", index, "S+", index + 1
     end 
-    println("")
-    println(repeat("#", 200))
-    println("The number of bonds with disorders is: $bonds_with_disorders")
-    println(repeat("#", 200))
+    println(repeat("#", 150))
+    println(repeat("#", 150))
     println("")
 
 
@@ -107,20 +106,30 @@ let
     end
 
 
-    # Set up the Hamiltonian as MPOs and the initial wave function as MPS
+    
+    #*************************************************************************************************************************
+    #*************************************************************************************************************************
+    # Set up the Hamiltonian and initial wave function, and perform DMRG simulation to obtain the ground-state wave function
+    println(repeat("#", 150))
+    println(repeat("#", 150))
+    println("Running DMRG simulation:")
+    
     Hamiltonian = MPO(os, s)
     ψ₀ = MPS(s, n -> isodd(n) ? "Up" : "Dn")
-    # states = [isodd(n) ? "Up" : "Dn" for n in 1:N]        # Neel state
-    # ψ₀ = randomMPS(s, states; linkdims = 8)       # random MPS 
+    # states = [isodd(n) ? "Up" : "Dn" for n in 1:N]    # Neel state
+    # ψ₀ = randomMPS(s, states; linkdims = 8)   # random MPS 
     
-    
+
     # Tune the parameters used in DMRG to obtain the ground-state wave function
     nsweeps = 10
     eigsolve_krylovdim = 50
     maxdim = [20, 50, 200, 2000]
     E, ψ = dmrg(Hamiltonian, ψ₀; nsweeps, maxdim, cutoff, eigsolve_krylovdim)
-    
-    
+    println(repeat("#", 150))
+    println(repeat("#", 150))
+    println("")
+
+
     # Measure physically relevant observables from the ground-state wave function
     # One-point, two-point functions
     Sz₀ = expect(ψ, "Sz"; sites=1:N)
@@ -133,8 +142,9 @@ let
     # Bond dimensions
     chi₀ = linkdims(ψ)
     # @show chi
-
-    file = open("/pscratch/sd/x/xiaobo23/TensorNetworks/spectral_function/disorders/Uniform/data/heisenberg_disorder_N$(N)_version$(random_seed).h5", "w")
+    
+    # Create an HDF5 file to save the ground-state wave function and physical observables
+    file = h5open("heisenberg_disorder_N$(N)_version$(random_seed).h5", "w")
     write(file, "Psi", ψ)
     write(file, "Energy", E)
     write(file, "SvN", SvN)
@@ -145,22 +155,21 @@ let
     #*************************************************************************************************************************
 
     
+    #*************************************************************************************************************************
+    #*************************************************************************************************************************
+    # Set up the gates used in the TEBD simulation
     # Make gates (1, 2), (2, 3), ..., (N-1, N)
     gates = ITensor[]
     gates_bonds_with_disorders = 0
+    println(repeat("#", 150))
+    println(repeat("#", 150))
+    println("Distribution of bond disorders in setting up the gates:")
+
     for index in 1 : N - 2
         s₁ = s[index]
         s₂ = s[index + 1]
         s₃ = s[index + 2]
 
-        # random_number = random_numbers[index]
-        # if random_number < 0.1
-        #     normalizedJ = J1 * 0.6
-        #     gates_bonds_with_disorders += 1
-        #     @show index, normalizedJ, random_number
-        # else
-        #     normalizedJ = J1
-        # end
         if index in bond_disorders
             normalizedJ = J1 * 0.6
             gates_bonds_with_disorders += 1
@@ -168,8 +177,7 @@ let
         else
             normalizedJ = J1
         end
-        @show index, normalizedJ
-
+        
         if isodd(index)
             effectiveJ = normalizedJ * (1 + delta)
         else
@@ -181,33 +189,24 @@ let
         Gj = exp(-im * τ/2 * hj)
         push!(gates, Gj)
 
-
         # Add two-site gate for next-nearest-neighbor interactions
         hj_tmp = 1/2 * J2 * op("S+", s₁) * op("S-", s₃) + 1/2 * J2 * op("S-", s₁) * op("S+", s₃) + J2 * op("Sz", s₁) * op("Sz", s₃) 
         Gj_tmp = exp(-im * τ/2 * hj_tmp)    
         push!(gates, Gj_tmp)
     end
 
+    
     # Add the last gate for the last two sites
     s₁ = s[N - 1]
     s₂ = s[N]
-    # random_number = random_numbers[N - 1]
-    # if random_number < 0.1
-    #     normalizedJ = J1 * 0.6
-    #     gates_bonds_with_disorders += 1
-    #     @show normalizedJ, random_number
-    # else
-    #     normalizedJ = J1
-    # end
-    # @show N-1, random_numbers[N - 1], normalizedJ
     if N - 1 in bond_disorders
         normalizedJ = J1 * 0.6
         gates_bonds_with_disorders += 1
+        @show N - 1, normalizedJ
     else
         normalizedJ = J1
     end
-     @show N - 1, normalizedJ
-     
+
     if isodd(N - 1)
         effectiveJ = normalizedJ * (1 + delta)
     else
@@ -216,6 +215,10 @@ let
     hj = 1/2 * effectiveJ * op("S+", s₁) * op("S-", s₂) + 1/2 * effectiveJ * op("S-", s₁) * op("S+", s₂) + effectiveJ * op("Sz", s₁) * op("Sz", s₂)
     Gj = exp(-im * τ/2 * hj) 
     push!(gates, Gj)
+    println(repeat("#", 150))
+    println(repeat("#", 150))
+    println("")
+
     
     # Add reverse gates due to the the symmetric Trotter decomposition
     append!(gates, reverse(gates))
@@ -223,18 +226,24 @@ let
     if bonds_with_disorders != gates_bonds_with_disorders
         error("The number of bonds with disorders in gates is not consistent with that in the Hamiltonian!")
     end
+    #*************************************************************************************************************************
+    #*************************************************************************************************************************
+
 
     #*************************************************************************************************************************
     #************************************************************************************************************************* 
-    # Apply a local perturbation at the center of two chains that are needed due to the dimmerization
-    center₁, center₂ = div(N, 2), div(N, 2) - 1
-    ψ_odd  = deepcopy(ψ)
-    ψ_even = deepcopy(ψ)
+    # Apply a local perturbation at each site of the chain because disorders break the translational invariance
+    # center₁, center₂ = div(N, 2), div(N, 2) - 1
+    center₁=1
+    center₂=center₁+1
+    ψ_odd, ψ_even = deepcopy(ψ), deepcopy(ψ)
+
     
     # Apply a local operator Sz to the even site in the center of the chain
     local_operator = op("Sz", s[center₁])
     ψ_even = apply(local_operator, ψ_even; cutoff)
 
+    
     # Apply a local operator Sz to the odd site in the center of the chain    
     local_operator = op("Sz", s[center₂])
     ψ_odd = apply(local_operator, ψ_odd; cutoff)
@@ -284,7 +293,8 @@ let
         ψ = apply(gates, ψ; cutoff)
         normalize!(ψ)
         chi[index + 1, :] = linkdims(ψ)
-        @show index, t + τ
+        @show index, t + τ, maximum(chi[index + 1, :])
+
 
         # Compute the physically relevant observables at different time steps
         Czz[index + 1, :] = correlation_matrix(ψ, "Sz", "Sz"; sites = 1 : N)
@@ -315,10 +325,8 @@ let
         end
         write(file, "Czz_unequaltime_even", Czz_unequaltime_even)
     end
-    #*************************************************************************************************************************
-    #*************************************************************************************************************************
-
-    write(file, "Psi", ψ)
+    
+    # write(file, "Psi", ψ)
     write(file, "Psi odd", ψ_odd)
     write(file, "Psi even", ψ_even)
     write(file, "Bond", chi)
@@ -329,6 +337,9 @@ let
     write(file, "Czz odd", Czz_odd)
     write(file, "Czz even", Czz_even)
     close(file)
+    #*************************************************************************************************************************
+    #*************************************************************************************************************************
+
 
     return
 end
