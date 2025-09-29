@@ -9,7 +9,7 @@ using MKL
 using HDF5
 using Random
 
-include("../Entanglement.jl")
+include("Entanglement.jl")
 
 
 # Because of the competition between BLAS and Strided.jl multithreading, we want to disable Strided.jl multithreading
@@ -24,14 +24,15 @@ OMP_NUM_THREADS = 8
 
 
 # Define the parameters used in the simulation
-const N = 200
+const N = 100
 const τ = 0.05
-const ttotal = 50.0
+const ttotal = 2.0
 const cutoff = 1E-10
 const J1 = 1.0       # Antiferromagnetic coupling
 const J2 = 0.35      # No next-nearest-neighbor interactions
 const delta = 0.04   # No dimmerization
 const time_steps = Int(ttotal / τ)
+const disorder_percentage=0.1
 
 let 
     println(repeat("#", 100))
@@ -47,28 +48,38 @@ let
     random_seed=0
     Random.seed!(random_seed * 1000 + 12345)
 
+    bond_disorders = zeros(Int, Int(disorder_percentage * N))
+    idx=1
+    while idx <= length(bond_disorders)
+        random_number = rand(1 : N-1)
+        if random_number != 0 && random_number != N && !(random_number in bond_disorders)
+            @show random_number
+            bond_disorders[idx] = random_number
+            idx += 1
+        end
+    end
+    println("The bonds with disorders are: ")
+    @show sort(bond_disorders)
+    println("")
 
     #*************************************************************************************************************************
     #*************************************************************************************************************************
     # Make an array of "site" indices
     s = siteinds("S=1/2", N; conserve_qns=true)
-    random_numbers = [rand(Float64) for _ in 1:N-1]
+    # random_numbers = [rand(Float64) for _ in 1:N-1]
 
-    
+        
     # Set up nearest-neighbor interactions with disorders
     os = OpSum()
     bonds_with_disorders = 0
     for index in 1 : N - 1
-        # random_number = rand(Float64)
-        random_number = random_numbers[index]
-        if random_number < 0.1
+        if index in bond_disorders
             normalizedJ = J1 * 0.6
             bonds_with_disorders += 1
-            @show index, normalizedJ, random_number
+            @show index, normalizedJ
         else
             normalizedJ = J1
         end
-        # @show index, normalizedJ
 
         if isodd(index)
             effectiveJ = normalizedJ * (1 + delta)
@@ -122,14 +133,14 @@ let
     # Bond dimensions
     chi₀ = linkdims(ψ)
     # @show chi
-    
-    h5open("/pscratch/sd/x/xiaobo23/TensorNetworks/spectral_function/disorders/Uniform/data/heisenberg_disorder_N$(N)_version$(random_seed).h5", "w") do file
-        write(file, "Psi", ψ)
-        write(file, "Energy", E)
-        write(file, "SvN", SvN)
-        write(file, "Bond t=0", chi₀)
-        write(file, "Sz t=0", Sz₀)
-        write(file, "Czz t=0", Czz₀)
+
+    file = open("/pscratch/sd/x/xiaobo23/TensorNetworks/spectral_function/disorders/Uniform/data/heisenberg_disorder_N$(N)_version$(random_seed).h5", "w")
+    write(file, "Psi", ψ)
+    write(file, "Energy", E)
+    write(file, "SvN", SvN)
+    write(file, "Bond t=0", chi₀)
+    write(file, "Sz t=0", Sz₀)
+    write(file, "Czz t=0", Czz₀)
     #*************************************************************************************************************************
     #*************************************************************************************************************************
 
@@ -142,11 +153,18 @@ let
         s₂ = s[index + 1]
         s₃ = s[index + 2]
 
-        random_number = random_numbers[index]
-        if random_number < 0.1
+        # random_number = random_numbers[index]
+        # if random_number < 0.1
+        #     normalizedJ = J1 * 0.6
+        #     gates_bonds_with_disorders += 1
+        #     @show index, normalizedJ, random_number
+        # else
+        #     normalizedJ = J1
+        # end
+        if index in bond_disorders
             normalizedJ = J1 * 0.6
             gates_bonds_with_disorders += 1
-            @show index, normalizedJ, random_number
+            @show index, normalizedJ
         else
             normalizedJ = J1
         end
@@ -173,15 +191,23 @@ let
     # Add the last gate for the last two sites
     s₁ = s[N - 1]
     s₂ = s[N]
-    random_number = random_numbers[N - 1]
-    if random_number < 0.1
+    # random_number = random_numbers[N - 1]
+    # if random_number < 0.1
+    #     normalizedJ = J1 * 0.6
+    #     gates_bonds_with_disorders += 1
+    #     @show normalizedJ, random_number
+    # else
+    #     normalizedJ = J1
+    # end
+    # @show N-1, random_numbers[N - 1], normalizedJ
+    if N - 1 in bond_disorders
         normalizedJ = J1 * 0.6
         gates_bonds_with_disorders += 1
-        @show normalizedJ, random_number
     else
         normalizedJ = J1
     end
-    # @show N-1, random_numbers[N - 1], normalizedJ
+     @show N - 1, normalizedJ
+     
     if isodd(N - 1)
         effectiveJ = normalizedJ * (1 + delta)
     else
@@ -302,9 +328,7 @@ let
     write(file, "Czz", Czz)
     write(file, "Czz odd", Czz_odd)
     write(file, "Czz even", Czz_even)
-    write(file, "Czz_unequaltime_odd",  Czz_unequaltime_odd)
-    write(file, "Czz_unequaltime_even", Czz_unequaltime_even)
-    end
+    close(file)
 
     return
 end
