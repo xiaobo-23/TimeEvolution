@@ -144,13 +144,15 @@ let
     # @show chi
     
     # Create an HDF5 file to save the ground-state wave function and physical observables
-    file = h5open("heisenberg_disorder_N$(N)_version$(random_seed).h5", "w")
-    write(file, "Psi", ψ)
-    write(file, "Energy", E)
-    write(file, "SvN", SvN)
-    write(file, "Bond t=0", chi₀)
-    write(file, "Sz t=0", Sz₀)
-    write(file, "Czz t=0", Czz₀)
+    output_filename = "heisenberg_disorder_N$(N)_version$(random_seed).h5"
+    h5open(output_filename, "cw") do file
+        write(file, "Psi", ψ)
+        write(file, "Energy", E)
+        write(file, "SvN", SvN)
+        write(file, "Bond t=0", chi₀)
+        write(file, "Sz t=0", Sz₀)
+        write(file, "Czz t=0", Czz₀)
+    end
     #*************************************************************************************************************************
     #*************************************************************************************************************************
 
@@ -238,14 +240,12 @@ let
     center₂=center₁+1
     ψ_odd, ψ_even = deepcopy(ψ), deepcopy(ψ)
 
-    
     # Apply a local operator Sz to the even site in the center of the chain
-    local_operator = op("Sz", s[center₁])
+    local_operator = op("Sz", s[center₂])
     ψ_even = apply(local_operator, ψ_even; cutoff)
 
-    
-    # Apply a local operator Sz to the odd site in the center of the chain    
-    local_operator = op("Sz", s[center₂])
+    # Apply a local operator Sz to the odd site in the center of the chain
+    local_operator = op("Sz", s[center₁])
     ψ_odd = apply(local_operator, ψ_odd; cutoff)
 
     
@@ -315,28 +315,32 @@ let
         end
 
         # Save unequal-time spin correlations at each time step 
-        if haskey(file, "Czz_unequaltime_odd")
-            delete_object(file, "Czz_unequaltime_odd")
-        end
-        write(file, "Czz_unequaltime_odd",  Czz_unequaltime_odd)
+        h5open(output_filename, "cw") do file
+            if haskey(file, "Czz_unequaltime_odd")
+                delete_object(file, "Czz_unequaltime_odd")
+            end
+            write(file, "Czz_unequaltime_odd",  Czz_unequaltime_odd)
 
-        if haskey(file, "Czz_unequaltime_even")
-            delete_object(file, "Czz_unequaltime_even")
+            if haskey(file, "Czz_unequaltime_even")
+                delete_object(file, "Czz_unequaltime_even")
+            end
+            write(file, "Czz_unequaltime_even", Czz_unequaltime_even)
         end
-        write(file, "Czz_unequaltime_even", Czz_unequaltime_even)
     end
     
-    # write(file, "Psi", ψ)
-    write(file, "Psi odd", ψ_odd)
-    write(file, "Psi even", ψ_even)
-    write(file, "Bond", chi)
-    write(file, "Sz", Sz)
-    write(file, "Sz odd", Sz_odd)
-    write(file, "Sz even", Sz_even)
-    write(file, "Czz", Czz)
-    write(file, "Czz odd", Czz_odd)
-    write(file, "Czz even", Czz_even)
-    close(file)
+    
+    h5open(output_filename, "cw") do file
+        # write(file, "Psi", ψ)
+        write(file, "Psi odd", ψ_odd)
+        write(file, "Psi even", ψ_even)
+        write(file, "Bond", chi)
+        write(file, "Sz", Sz)
+        write(file, "Sz odd", Sz_odd)
+        write(file, "Sz even", Sz_even)
+        write(file, "Czz", Czz)
+        write(file, "Czz odd", Czz_odd)
+        write(file, "Czz even", Czz_even)
+    end
     #*************************************************************************************************************************
     #*************************************************************************************************************************
 
