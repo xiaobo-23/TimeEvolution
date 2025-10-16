@@ -12,9 +12,9 @@ using Random
 include("Entanglement.jl")
 
 # Because of the competition between BLAS and Strided.jl multithreading, we want to disable Strided.jl multithreading
-MKL_NUM_THREADS = 4
-OPENBLAS_NUM_THREADS = 4  
-OMP_NUM_THREADS = 4
+MKL_NUM_THREADS = 8
+OPENBLAS_NUM_THREADS = 8  
+OMP_NUM_THREADS = 8
 
 # Monitor the number of threads used by BLAS and LAPACK
 @show BLAS.get_config()
@@ -23,24 +23,25 @@ OMP_NUM_THREADS = 4
 # Define the parameters used in the simulation
 const N = 100
 const τ = 0.05
-const ttotal = 2.0
+const ttotal = 50.0
 const cutoff = 1E-10
 const J1 = 1.0       # Antiferromagnetic coupling
 const J2 = 0.35      # No next-nearest-neighbor interactions
 const delta = 0.04   # No dimmerization
 const time_steps = Int(ttotal / τ)
 const disorder_percentage=0.1
+const pinning=0.02
 
 
 let 
     println(repeat("#", 150))
-    println(repeat("#",  150))
+    println(repeat("#", 150))
     println("Time evolve the J1-J2 Heisenberg model with disorders.")
     println("The parameters used in the simulation are:")
-    @show N, cutoff, τ, ttotal, J1, J2, delta   
+    @show N, cutoff, τ, ttotal, J1, J2, delta, pinning    
    
     
-    # Set up the random number generator to guarantee reproducibility
+    # Set up the bonds with disorders in a controlled way by using the same random seed
     random_seed=0
     Random.seed!(random_seed * 10000 + 1234567)
 
@@ -49,11 +50,11 @@ let
     while idx <= length(bond_disorders)
         random_number = rand(1 : N-1)
         if random_number != 0 && random_number != N && !(random_number in bond_disorders)
-            # @show random_number
             bond_disorders[idx] = random_number
             idx += 1
         end
     end
+    # bond_disorders = []
     println("")
     println("The bonds with disorders are: ")
     @show bond_disorders
@@ -106,6 +107,15 @@ let
     end
 
 
+    # Adding a staggered pinning field to all sites 
+    for idx in 1:N 
+        if isodd(idx)
+            os += pinning, "Sz", idx
+        else
+            os += -pinning, "Sz", idx
+        end
+    end
+
     
     #*************************************************************************************************************************
     #*************************************************************************************************************************
@@ -114,6 +124,7 @@ let
     println(repeat("#", 150))
     println("Running DMRG simulation:")
     
+    
     Hamiltonian = MPO(os, s)
     ψ₀ = MPS(s, n -> isodd(n) ? "Up" : "Dn")
     # states = [isodd(n) ? "Up" : "Dn" for n in 1:N]    # Neel state
@@ -121,7 +132,7 @@ let
     
 
     # Tune the parameters used in DMRG to obtain the ground-state wave function
-    nsweeps = 10
+    nsweeps = 20
     eigsolve_krylovdim = 50
     maxdim = [20, 50, 200, 2000]
     E, ψ = dmrg(Hamiltonian, ψ₀; nsweeps, maxdim, cutoff, eigsolve_krylovdim)
@@ -132,6 +143,10 @@ let
 
     # Measure physically relevant observables from the ground-state wave function
     # One-point, two-point functions
+    Splus  = expect(ψ, "S+"; sites=1:N)
+    Sminus = expect(ψ, "S-"; sites=1:N)
+    Sx₀ = 0.5 * (Splus + Sminus)
+    Sy₀ = -0.5im * (Splus - Sminus)
     Sz₀ = expect(ψ, "Sz"; sites=1:N)
     Czz₀ = correlation_matrix(ψ, "Sz", "Sz"; sites=1:N)
    
@@ -144,12 +159,15 @@ let
     # @show chi
     
     # Create an HDF5 file to save the ground-state wave function and physical observables
-    output_filename = "heisenberg_disorder_N$(N)_version$(random_seed).h5"
+    # output_filename = "heisenberg_disorder_N$(N)_version$(random_seed).h5"
+    output_filename = "heisenberg_disorder_N$(N)_pinning$(pinning)_disorder0.h5"
     h5open(output_filename, "cw") do file
         write(file, "Psi", ψ)
         write(file, "Energy", E)
         write(file, "SvN", SvN)
         write(file, "Bond t=0", chi₀)
+        write(file, "Sx t=0", Sx₀)
+        write(file, "Sy t=0", Sy₀)
         write(file, "Sz t=0", Sz₀)
         write(file, "Czz t=0", Czz₀)
     end
@@ -235,18 +253,18 @@ let
     #*************************************************************************************************************************
     #************************************************************************************************************************* 
     # Apply a local perturbation at each site of the chain because disorders break the translational invariance
-    # center₁, center₂ = div(N, 2), div(N, 2) - 1
-    center₁=1
-    center₂=center₁+1
+    # center₁=1
+    # center₂=center₁+1
+    center₁, center₂ = div(N, 2) - 1, div(N, 2)
     ψ_odd, ψ_even = deepcopy(ψ), deepcopy(ψ)
-
-    # Apply a local operator Sz to the even site in the center of the chain
-    local_operator = op("Sz", s[center₂])
-    ψ_even = apply(local_operator, ψ_even; cutoff)
 
     # Apply a local operator Sz to the odd site in the center of the chain
     local_operator = op("Sz", s[center₁])
     ψ_odd = apply(local_operator, ψ_odd; cutoff)
+
+    # Apply a local operator Sz to the even site in the center of the chain
+    local_operator = op("Sz", s[center₂])
+    ψ_even = apply(local_operator, ψ_even; cutoff)
 
     
     # Initialize the arrays to store the physical observables at different time steps
@@ -328,7 +346,7 @@ let
         end
     end
     
-    
+
     h5open(output_filename, "cw") do file
         # write(file, "Psi", ψ)
         write(file, "Psi odd", ψ_odd)
