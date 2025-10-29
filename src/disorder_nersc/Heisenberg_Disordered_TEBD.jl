@@ -23,7 +23,7 @@ OMP_NUM_THREADS = 8
 # Define the parameters used in the simulation
 const N = 100
 const τ = 0.05
-const ttotal = 50.0
+const ttotal = 0.1
 const cutoff = 1E-10
 const J1 = 1.0       # Antiferromagnetic coupling
 const J2 = 0.35      # No next-nearest-neighbor interactions
@@ -107,12 +107,11 @@ let
     end
 
 
-    # Adding a staggered pinning field to all sites 
-    for idx in 1:N 
-        if isodd(idx)
-            os += pinning, "Sz", idx
-        else
-            os += -pinning, "Sz", idx
+    # Add staggered pinning fields to all sites
+    if abs(pinning) > 1e-8
+        for idx in 1:N
+            field_strength = isodd(idx) ? -pinning : pinning
+            os += field_strength, "Sz", idx
         end
     end
 

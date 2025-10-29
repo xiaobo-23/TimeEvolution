@@ -30,16 +30,15 @@ const J₂ = 0.35      # No next-nearest-neighbor interactions
 const delta = 0.04   # No dimmerization
 const time_steps = Int(ttotal / τ)
 const α = 1e-6
-const disorder_percentage=0.05
-
+const disorder_percentage=0.04
+const pinning=0.02
 
 let 
     println(repeat("#", 200))
     println(repeat("#", 200))
-    println("Time evolve the perturbed ground state of the J1-J2 Heisenberg model with disorders on sites.")
+    println("Time evolve the perturbed ground state of the J1-J2 Heisenberg model with site disorders.")
     println("The parameters used in the simulation are:")
-    @show N, cutoff, τ, ttotal, J₁, J₂, delta
-    # @show pinning  
+    @show N, cutoff, τ, ttotal, J₁, J₂, delta, pinning 
    
     
     # Set up the bonds with disorders in a controlled way by using the same random seed
@@ -117,6 +116,15 @@ let
         os += 1/2 * effective_J₂, "S+", index, "S-", index + 2
         os += 1/2 * effective_J₂, "S-", index, "S+", index + 2
     end
+    
+    
+    # Add staggered pinning fields to all sites
+    if abs(pinning) > 1e-8
+        for idx in 1:N
+            field_strength = isodd(idx) ? -pinning : pinning
+            os += field_strength, "Sz", idx
+        end
+    end
     println(repeat("#", 200))
     println(repeat("#", 200))
     println("")
@@ -134,7 +142,7 @@ let
     Hamiltonian = MPO(os, s)
     # ψ₀ = MPS(s, n -> isodd(n) ? "Up" : "Dn")
     states = [isodd(n) ? "Up" : "Dn" for n in 1:N]    # Neel state
-    ψ₀ = randomMPS(s, states; linkdims = 8)           # random MPS 
+    ψ₀ = randomMPS(s, states; linkdims = 16)           # random MPS 
     
 
     # Tune the parameters used in DMRG to obtain the ground-state wave function
@@ -308,10 +316,10 @@ let
     Sz = zeros(ComplexF64, time_steps + 1, N)
     Sz_odd = zeros(ComplexF64, time_steps + 1, N)
     Sz_even = zeros(ComplexF64, time_steps + 1, N)
-    Cxx_time_odd = zeros(ComplexF64, time_steps, N)
-    Cxx_time_even = zeros(ComplexF64, time_steps, N)
-    Cyy_time_odd = zeros(ComplexF64, time_steps, N)
-    Cyy_time_even = zeros(ComplexF64, time_steps, N)
+    # Cxx_time_odd = zeros(ComplexF64, time_steps, N)
+    # Cxx_time_even = zeros(ComplexF64, time_steps, N)
+    # Cyy_time_odd = zeros(ComplexF64, time_steps, N)
+    # Cyy_time_even = zeros(ComplexF64, time_steps, N)
     Czz_unequaltime_odd  = zeros(ComplexF64, time_steps, N) 
     Czz_unequaltime_even = zeros(ComplexF64, time_steps, N)
     chi = zeros(Float64, time_steps + 1, N - 1)
@@ -447,10 +455,10 @@ let
         write(file, "Psi", ψ)
         write(file, "Psi odd", ψ_odd)
         write(file, "Psi even", ψ_even)
-        write(file, "Psi_x odd", ψx_odd)
-        write(file, "Psi_x even", ψx_even)
-        write(file, "Psi_y odd", ψy_odd)
-        write(file, "Psi_y even", ψy_even)
+        # write(file, "Psi_x odd", ψx_odd)
+        # write(file, "Psi_x even", ψx_even)
+        # write(file, "Psi_y odd", ψy_odd)
+        # write(file, "Psi_y even", ψy_even)
         write(file, "Bond", chi)
         write(file, "Sz", Sz)
         write(file, "Sz odd", Sz_odd)
