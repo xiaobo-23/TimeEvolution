@@ -2,11 +2,11 @@
 ## Develop time dependent variational principle (TDVP) to simulate the time evolution of spin models and compare with TEBD results 
 ## Designed to simulate neutron scattering experiments and quantum dynamics for the NEAT LDRD 
 
-
 using ITensors
 using ITensorMPS
 using Observers: observer
 using HDF5
+include("tdvp_models.jl")
 
 
 # Set up the parameters used in the simulation
@@ -17,71 +17,10 @@ const J2 = 0.5               # next-nearest-neighbor interaction strength
 const Δ = 0.2                # dimerization parameter   
 
 
- # # Set up the Heisenberg Hamiltonian using OpSum 
-  # function heisenberg(n; J1 = 1.0, J2 = 0.5, Δ = 0.2)
-  #     os = OpSum()
-
-  #     if !iszero(J1)
-  #         for j in 1:2:(n - 1)
-  #             # @show j
-  #             os += J1 * (1 + Δ) / 2, "S+", j, "S-", j + 1
-  #             os += J1 * (1 + Δ) / 2, "S-", j, "S+", j + 1
-  #             os += J1 * (1 + Δ), "Sz", j, "Sz", j + 1
-  #         end
-          
-  #         for j in 2:2:(n - 2)
-  #             # @show j
-  #             os += J1 * (1 - Δ) / 2, "S+", j, "S-", j + 1
-  #             os += J1 * (1 - Δ) / 2, "S-", j, "S+", j + 1
-  #             os += J1 * (1 - Δ), "Sz", j, "Sz", j + 1
-  #         end
-  #     end
-
-  #     if !iszero(J2)
-  #         for j in 1:(n - 2)
-  #             os += J2 / 2, "S+", j, "S-", j + 2
-  #             os += J2 / 2, "S-", j, "S+", j + 2
-  #             os += J2, "Sz", j, "Sz", j + 2
-  #         end
-  #     end
-  #     return os
-  # end
-
-
-
 function main()    
   # Define the spin sites in an MPS
   s = siteinds("S=1/2", n)
-
-  # Set up the Heisenberg Hamiltonian as an MPO using OpSum
-  os = OpSum()
-  
-  # Set up the nearest-neighbor interaction with dimerization 
-  if !iszero(J1)
-    for j in 1:2:(n - 1)
-        # @show j
-        os += J1 * (1 + Δ) / 2, "S+", j, "S-", j + 1
-        os += J1 * (1 + Δ) / 2, "S-", j, "S+", j + 1
-        os += J1 * (1 + Δ), "Sz", j, "Sz", j + 1
-    end
-    
-    for j in 2:2:(n - 2)
-        # @show j
-        os += J1 * (1 - Δ) / 2, "S+", j, "S-", j + 1
-        os += J1 * (1 - Δ) / 2, "S-", j, "S+", j + 1
-        os += J1 * (1 - Δ), "Sz", j, "Sz", j + 1
-    end
-  end
-
-
-  # Set up the next-nearest-neighbor interaction 
-  if !iszero(J2)
-      for j in 1:(n - 2)
-          os += J2 / 2, "S+", j, "S-", j + 2
-          os += J2 / 2, "S-", j, "S+", j + 2
-          os += J2, "Sz", j, "Sz", j + 2
-      end
-  end
+  os = heisenberg_dimerized(n; J1=J1, J2=J2, Δ=Δ)
 
   
   # Convert OpSum to MPO
@@ -111,8 +50,8 @@ function main()
   return_state(; state) = state
   measure_sz(; state) = expect(state, "Sz"; sites = 1:n)
   obs = observer("steps" => step, "times" => current_time, "states" => return_state, "sz" => measure_sz)
-
   
+
   # Running TDVP time evolution in the imaginary time direction
   ϕ = tdvp(
     H,
@@ -132,7 +71,6 @@ function main()
   println(repeat("#", 200))
   println("")
 
-  
   println("\nCompare Results")
   println(repeat("#", 200))
   for idx in 1:length(obs.steps)
@@ -144,11 +82,16 @@ function main()
     println()
   end
   
+  # @show obs.sz[1]
+  # @show obs.sz[2]
+  # @show obs.sz[length(obs.sz)]
+  # @show Sz
   
-  @show obs.sz[1]
-  @show obs.sz[2]
-  @show obs.sz[length(obs.sz)]
-  @show Sz
+  # for idx in 1:length(obs.sz)
+  #   print("step = ", idx)
+  #   print(", ⟨Sᶻ⟩ = ", obs.sz[idx])
+  #   println()
+  # end
   println(repeat("#", 200))
   println("")
 
