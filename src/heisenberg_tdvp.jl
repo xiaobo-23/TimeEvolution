@@ -6,6 +6,7 @@ using ITensors
 using ITensorMPS
 using Observers: observer
 using HDF5
+using Random
 include("tdvp_models.jl")
 
 
@@ -25,7 +26,9 @@ function main()
   
   # Convert OpSum to MPO
   H = MPO(os, s)
+  Random.seed!(1234)
   ψ = random_mps(s, "↑"; linkdims=10)
+  sz₀ = expect(ψ, "Sz"; sites=1:n)
   # @show inner(ψ', H, ψ) / inner(ψ, ψ)
 
   
@@ -33,21 +36,20 @@ function main()
   println(repeat("#", 200))
   println("Running DMRG to obtain the ground-state wave function and energy...")
   e0, ϕ0 = dmrg(H, ψ; nsweeps=10, maxdim=200, cutoff=1e-10)
-  Sz₀ = expect(ϕ0, "Sz"; sites=1:n)
+  # Sz₀ = expect(ϕ0, "Sz"; sites=1:n)
   @show e0 
   @show inner(ϕ0', H, ϕ0) / inner(ϕ0, ϕ0)
-  @show Sz₀
+  # @show Sz₀
   println(repeat("#", 200))
   println("")
   
 
   # Save the ground-state wave function and energy into an HDF5 file as the initial state for TEBD time evolution
-  output_filename = "data/heisenberg_input_n$(n).h5"
+  output_filename = "data/heisenberg_input_n$(n)_neel.h5"
   h5open(output_filename, "w") do file
     write(file, "E0", e0)
     write(file, "Psi", ϕ0)
   end
-
 
   
   # Running TDVP to obtain the ground-state wave function and energy
@@ -80,46 +82,46 @@ function main()
   obs = observer("steps" => step, "times" => current_time, "states" => return_state, "sz" => measure_sz, "czz" => measure_czz)
   
 
-  # Running TDVP along the imaginary time direction to obtain the ground-state wave function
-  ϕ = tdvp(
-    H,
-    -20.0,
-    ψ;
-    nsteps=20,
-    maxdim=100,
-    cutoff=1e-10,
-    normalize=true,
-    outputlevel=1,
-    nsite=2,
-    (observer!)=obs,
-  )
-  @show inner(ϕ', H, ϕ) / inner(ϕ, ϕ)
-  println(repeat("#", 200))
-  println("")
+  # # Running TDVP along the imaginary time direction to obtain the ground-state wave function
+  # ϕ = tdvp(
+  #   H,
+  #   -20.0,
+  #   ψ;
+  #   nsteps=20,
+  #   maxdim=100,
+  #   cutoff=1e-10,
+  #   normalize=true,
+  #   outputlevel=1,
+  #   nsite=2,
+  #   (observer!)=obs,
+  # )
+  # @show inner(ϕ', H, ϕ) / inner(ϕ, ϕ)
+  # println(repeat("#", 200))
+  # println("")
 
     
-  println("\nCompare Results of the Imaginary-Time Evolution")
-  println(repeat("#", 200))
-  for idx in 1:length(obs.steps)
-    println("step = ", obs.steps[idx])
-    println(", time = ", round(obs.times[idx]; digits=3))
-    println(", |⟨ψⁿ|ψⁱ⟩| = ", round(abs(inner(obs.states[idx], ψ)); digits=3))
-    println(", |⟨ψⁿ|ψᶠ⟩| = ", round(abs(inner(obs.states[idx], ϕ)); digits=3))
-    print(", ⟨Sᶻ⟩ = ", length(obs.sz[idx]))
-    # print(", ⟨Sᶻ(t)Sᶻ(0)⟩ size ", length(obs.sz_time[idx]))
-    # print(", ⟨Sᶻ(t)Sᶻ(0)⟩ = ", obs.sz_time[idx])
-    println(", ⟨Czz⟩ size ", length(obs.czz[idx]))
-    println()
-  end
-  
-  # for idx in 1:length(obs.sz)
-  #   print("step = ", idx)
-  #   print(", ⟨Sᶻ⟩ = ", obs.sz[idx])
+  # println("\nCompare Results of the Imaginary-Time Evolution")
+  # println(repeat("#", 200))
+  # for idx in 1:length(obs.steps)
+  #   println("step = ", obs.steps[idx])
+  #   println(", time = ", round(obs.times[idx]; digits=3))
+  #   println(", |⟨ψⁿ|ψⁱ⟩| = ", round(abs(inner(obs.states[idx], ψ)); digits=3))
+  #   println(", |⟨ψⁿ|ψᶠ⟩| = ", round(abs(inner(obs.states[idx], ϕ)); digits=3))
+  #   print(", ⟨Sᶻ⟩ = ", length(obs.sz[idx]))
+  #   # print(", ⟨Sᶻ(t)Sᶻ(0)⟩ size ", length(obs.sz_time[idx]))
+  #   # print(", ⟨Sᶻ(t)Sᶻ(0)⟩ = ", obs.sz_time[idx])
+  #   println(", ⟨Czz⟩ size ", length(obs.czz[idx]))
   #   println()
   # end
+  
+  # # for idx in 1:length(obs.sz)
+  # #   print("step = ", idx)
+  # #   print(", ⟨Sᶻ⟩ = ", obs.sz[idx])
+  # #   println()
+  # # end
 
-  println(repeat("#", 200))
-  println("")
+  # println(repeat("#", 200))
+  # println("")
   
 
   # sz₁ = Matrix{Float64}(undef, length(obs.sz), n)
@@ -162,7 +164,7 @@ function main()
   ϕ_final = tdvp(
     H,
     -10im,
-    ψ;
+    init;
     nsteps=50,
     maxdim=200,
     cutoff=1e-10,
@@ -182,7 +184,7 @@ function main()
     println("step = ", obs.steps[idx])
     println(", time = ", round(obs.times[idx]; digits=3))
     println(", |⟨ψⁿ|ψⁱ⟩| = ", round(abs(inner(obs.states[idx], ψ)); digits=3))
-    println(", |⟨ψⁿ|ψᶠ⟩| = ", round(abs(inner(obs.states[idx], ϕ)); digits=3))
+    println(", |⟨ψⁿ|ψᶠ⟩| = ", round(abs(inner(obs.states[idx], ϕ_final)); digits=3))
     print(", ⟨Sᶻ⟩ = ", obs.sz[idx])
     # print(", ⟨Sᶻ(t)Sᶻ(0)⟩ size ", length(obs.sz_time[idx]))
     # print(", ⟨Sᶻ(t)Sᶻ(0)⟩ = ", obs.sz_time[idx])
@@ -199,7 +201,7 @@ function main()
   end
   @show sz₂[1, :]
   @show obs.sz[1]
-
+  @show sz₀
 
   czz₂ = Matrix{ComplexF64}(undef, length(obs.sz), n*n)
   for idx in 1:length(obs.sz)
