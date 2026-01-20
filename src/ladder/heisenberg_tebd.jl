@@ -56,16 +56,70 @@ let
     lattice = ladder_lattice(Nx, Ny; yperiodic=false)    
 
 
+    # Make an array of site indices
+    s = siteinds("S=1/2", N; conserve_qns=true)
+
+
     # Construct the Hamiltonian using OpSum
     os = OpSum()
     for bond in lattice 
         i, j = bond.s1, bond.s2
         
+
+        # Set up nearest-neighbor interactions along the horizontal direction
+        if abs(i - j) == 2
+            x₁, x₂ = div(i - 1, Ny) + 1, div(j - 1, Ny) + 1
+            y₁, y₂ = mod(i - 1, Ny) + 1, mod(j - 1, Ny) + 1
+            
+            # Determine the effective interaction strength considering the dimerization effect
+            dimerization_sign = (y₁ == y₂ == 1) == isodd(x₁) ? 1 : -1
+            J_effective = J1 * (1 + dimerization_sign * delta)
+
+            # Add the interaction terms to OpSum
+            os .+= -1/2 * J_effective, "S+", i, "S-", j 
+            os .+= -1/2 * J_effective, "S-", i, "S+", j
+            os .+= -J_effective, "Sz", i, "Sz", j
+            # @show i, x₁, y₁, j, x₂, y₂, dimerization_sign, J_effective
+        end
+        
+
+        # Set up next-neareest-neighbor interactions along the horizontal direction
+        if abs(i - j) == 4
+            os .+= -1/2 * J2, "S+", i, "S-", j 
+            os .+= -1/2 * J2, "S-", i, "S+", j 
+            os .+= -J2, "Sz", i, "Sz", j 
+        end
+
+
+        # Set up the interactions along the vertical direction
+        if abs(i - j) == 1
+            os .+= -1/2 * Jp, "S+", i, "S-", j 
+            os .+= -1/2 * Jp, "S-", i, "S+", j
+            os .+= -Jp, "Sz", i, "Sz", j
+        end
     end
 
 
-    # # Make an array of "site" indices
-    # s = siteinds("S=1/2", N; conserve_qns=true)
+    # Construct the Hamiltonian MPO and initialize the wave function as a random MPS
+    Hamiltonian = MPO(os, s)
+    
+
+    # Initialize the wave function as an MPS
+    states = [isodd(n) ? "Up" : "Dn" for n in 1:N]
+    ψ₀ = randomMPS(s, states; linkdims = 8)     # Initialize a random MPS
+    # ψ₀ = MPS(s, n -> isodd(n) ? "Up" : "Dn")  # Initialize a prodcut state 
+    
+
+    # Define parameters that are used in the DMRG optimization process
+    nsweeps = 10
+    maxdim = [20, 50, 200, 1000]
+    eigsolve_krylovdim = 50
+    E, ψ = dmrg(Hamiltonian, ψ₀; nsweeps, maxdim, cutoff, eigsolve_krylovdim)
+    Sz₀ = expect(ψ, "Sz"; sites=1:N)
+    Czz₀ = correlation_matrix(ψ, "Sz", "Sz"; sites=1:N)
+    #**************************************************************************************************************
+    #************************************************************************************************************** 
+
 
     # # Make gates (1, 2), (2, 3), ..., (N-1, N)
     # gates = ITensor[]
@@ -107,53 +161,6 @@ let
     # append!(gates, reverse(gates))
 
     
-    # Run DMRG simulation to obtain the ground-state wave function
-    # for index = 1 : N - 2
-    #     # Construct the Hamiltonian for the Heisenberg model
-    #     # Consider the nearest-neighbor dimmerized interactions
-    #     if index % 2 == 1
-    #         os += 1/2 * J1 * (1 + delta), "S+", index, "S-", index + 1
-    #         os += 1/2 * J1 * (1 + delta), "S-", index, "S+", index + 1
-    #         os += J1 * (1 + delta), "Sz", index, "Sz", index + 1
-    #     else
-    #         os += 1/2 * J1 * (1 - delta), "S+", index, "S-", index + 1
-    #         os += 1/2 * J1 * (1 - delta), "S-", index, "S+", index + 1
-    #         os += J1 * (1 - delta), "Sz", index, "Sz", index + 1
-    #     end
-
-    #     # Consider the next-nearest-neighbor interactions
-    #     os += 1/2 * J2, "S+", index, "S-", index + 2    
-    #     os += 1/2 * J2, "S-", index, "S+", index + 2
-    #     os += J2, "Sz", index, "Sz", index + 2  
-    # end
-
-    # # Construct the MPO for the last two sites
-    # if (N - 1) % 2 == 1
-    #     os += 1/2 * J1 * (1 + delta), "S+", N - 1, "S-", N  
-    #     os += 1/2 * J1 * (1 + delta), "S-", N - 1, "S+", N
-    #     os += J1 * (1 + delta), "Sz", N - 1, "Sz", N
-    # else
-    #     os += 1/2 * J1 * (1 - delta), "S+", N - 1, "S-", N  
-    #     os += 1/2 * J1 * (1 - delta), "S-", N - 1, "S+", N
-    #     os += J1 * (1 - delta), "Sz", N - 1, "Sz", N
-    # end
-
-    
-    # Hamiltonian = MPO(os, s)
-    # ψ₀ = MPS(s, n -> isodd(n) ? "Up" : "Dn")
-    
-
-    # # Define parameters that are used in the DMRG optimization process
-    # nsweeps = 20
-    # maxdim = [20, 50, 200, 2000]
-    # states = [isodd(n) ? "Up" : "Dn" for n in 1:N]
-    # # ψ = randomMPS(s, states; linkdims = 10)
-    # E, ψ = dmrg(Hamiltonian, ψ₀; nsweeps, maxdim, cutoff)
-    
-    # Sz₀ = expect(ψ, "Sz"; sites=1:N)
-    # Czz₀ = correlation_matrix(ψ, "Sz", "Sz"; sites=1:N)
-    # # @show Sz₀
-    # # @show Czz₀
 
 
     # # 08/14/2024
