@@ -76,26 +76,26 @@ let
             J_effective = J1 * (1 + dimerization_sign * delta)
 
             # Add the interaction terms to OpSum
-            os .+= -1/2 * J_effective, "S+", i, "S-", j 
-            os .+= -1/2 * J_effective, "S-", i, "S+", j
-            os .+= -J_effective, "Sz", i, "Sz", j
+            os .+= 1/2 * J_effective, "S+", i, "S-", j 
+            os .+= 1/2 * J_effective, "S-", i, "S+", j
+            os .+= J_effective, "Sz", i, "Sz", j
             # @show i, x₁, y₁, j, x₂, y₂, dimerization_sign, J_effective
         end
         
 
         # Set up next-neareest-neighbor interactions along the horizontal direction
         if abs(i - j) == 4
-            os .+= -1/2 * J2, "S+", i, "S-", j 
-            os .+= -1/2 * J2, "S-", i, "S+", j 
-            os .+= -J2, "Sz", i, "Sz", j 
+            os .+= 1/2 * J2, "S+", i, "S-", j 
+            os .+= 1/2 * J2, "S-", i, "S+", j 
+            os .+= J2, "Sz", i, "Sz", j 
         end
 
 
         # Set up the interactions along the vertical direction
         if abs(i - j) == 1
-            os .+= -1/2 * Jp, "S+", i, "S-", j 
-            os .+= -1/2 * Jp, "S-", i, "S+", j
-            os .+= -Jp, "Sz", i, "Sz", j
+            os .+= 1/2 * Jp, "S+", i, "S-", j 
+            os .+= 1/2 * Jp, "S-", i, "S+", j
+            os .+= Jp, "Sz", i, "Sz", j
         end
     end
 
@@ -110,20 +110,44 @@ let
     # ψ₀ = MPS(s, n -> isodd(n) ? "Up" : "Dn")  # Initialize a prodcut state 
     
 
+
+
     # Define parameters that are used in the DMRG optimization process
+    println("\n" * repeat("=", 200))
+    println("Running DMRG algorithms to obtain the ground state of the J₁-J₂-δ Heisenberg ladder model...")
+    println(repeat("=", 200))
     nsweeps = 10
     maxdim = [20, 50, 200, 1000]
-    eigsolve_krylovdim = 50
+    eigsolve_krylovdim = 100
     E, ψ = dmrg(Hamiltonian, ψ₀; nsweeps, maxdim, cutoff, eigsolve_krylovdim)
     Sz₀ = expect(ψ, "Sz"; sites=1:N)
     Czz₀ = correlation_matrix(ψ, "Sz", "Sz"; sites=1:N)
+    println(repeat("=", 200))
     #**************************************************************************************************************
     #************************************************************************************************************** 
 
 
-    # # Make gates (1, 2), (2, 3), ..., (N-1, N)
-    # gates = ITensor[]
-    # for index in 1 : N - 2
+
+   
+   
+    #**************************************************************************************************************
+    #************************************************************************************************************** 
+    # Construct the TEBD gates for time evolution
+    gates = ITensor[]
+    
+    # Add two-qubit gate for interactions along the vertical direction 
+    for index in 1 : 2 : N 
+        s₁ = s[index]
+        s₂ = s[index + 1]
+
+        hj = 1/2 * Jp * op("S+", s₁) * op("S-", s₂) + 1/2 * Jp * op("S-", s₁) * op("S+", s₂) + Jp * op("Sz", s₁) * op("Sz", s₂)
+        Gj = exp(-im * τ/2 * hj)
+        push!(gates, Gj)
+    end
+
+
+
+    # for index in 1 : 2 : N 
     #     s₁ = s[index]
     #     s₂ = s[index + 1]
     #     s₃ = s[index + 2]
