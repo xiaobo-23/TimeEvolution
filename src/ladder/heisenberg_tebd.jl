@@ -22,7 +22,7 @@ OMP_NUM_THREADS = 8
 
 
 # Define the model parameters as well as the time evolution parameters
-const Nx = 100
+const Nx = 10
 const Ny = 2
 const N = Nx * Ny
 const J1 = 1.0
@@ -76,8 +76,8 @@ let
             J_effective = J1 * (1 + dimerization_sign * delta)
 
             # Add the interaction terms to OpSum
-            os .+= 1/2 * J_effective, "S+", i, "S-", j 
-            os .+= 1/2 * J_effective, "S-", i, "S+", j
+            os .+= 0.5 * J_effective, "S+", i, "S-", j 
+            os .+= 0.5 * J_effective, "S-", i, "S+", j
             os .+= J_effective, "Sz", i, "Sz", j
             # @show i, x₁, y₁, j, x₂, y₂, dimerization_sign, J_effective
         end
@@ -85,16 +85,16 @@ let
 
         # Set up next-neareest-neighbor interactions along the horizontal direction
         if abs(i - j) == 4
-            os .+= 1/2 * J2, "S+", i, "S-", j 
-            os .+= 1/2 * J2, "S-", i, "S+", j 
+            os .+= 0.5 * J2, "S+", i, "S-", j 
+            os .+= 0.5 * J2, "S-", i, "S+", j 
             os .+= J2, "Sz", i, "Sz", j 
         end
 
 
         # Set up the interactions along the vertical direction
         if abs(i - j) == 1
-            os .+= 1/2 * Jp, "S+", i, "S-", j 
-            os .+= 1/2 * Jp, "S-", i, "S+", j
+            os .+= 0.5 * Jp, "S+", i, "S-", j 
+            os .+= 0.5 * Jp, "S-", i, "S+", j
             os .+= Jp, "Sz", i, "Sz", j
         end
     end
@@ -109,7 +109,6 @@ let
     ψ₀ = randomMPS(s, states; linkdims = 8)     # Initialize a random MPS
     # ψ₀ = MPS(s, n -> isodd(n) ? "Up" : "Dn")  # Initialize a prodcut state 
     
-
 
 
     # Define parameters that are used in the DMRG optimization process
@@ -129,7 +128,6 @@ let
 
 
    
-   
     #**************************************************************************************************************
     #************************************************************************************************************** 
     # Construct the TEBD gates for time evolution
@@ -146,47 +144,46 @@ let
     end
 
 
+    # Add two-qubit gates for nearest-neighbor interactions along the horizontal direction
+    for offset in 1:3
+        for index in offset:3:N-2
+            s₁ = s[index]
+            s₂ = s[index + 2]
+            
+            x₁ = div(index - 1, Ny) + 1
+            y₁ = mod(index - 1, Ny) + 1
+            
+            dimerization_sign = (y₁ == 1) == isodd(x₁) ? 1 : -1
+            J_effective = J1 * (1 + dimerization_sign * delta)
 
-    # for index in 1 : 2 : N 
-    #     s₁ = s[index]
-    #     s₂ = s[index + 1]
-    #     s₃ = s[index + 2]
-
-    #     # Add two-site gate for nearest-neighbor interactions
-    #     if index % 2 == 1
-    #         hj = 1/2 * J1 * (1 + delta) * op("S+", s₁) * op("S-", s₂) + 1/2 * J1 * (1 + delta) * op("S-", s₁) * op("S+", s₂) + J1 * (1 + delta) * op("Sz", s₁) * op("Sz", s₂)
-    #         Gj = exp(-im * τ/2 * hj)
-    #     else
-    #         hj = 1/2 * J1 * (1 - delta) * op("S+", s₁) * op("S-", s₂) + 1/2 * J1 * (1 - delta) * op("S-", s₁) * op("S+", s₂) + J1 * (1 - delta) * op("Sz", s₁) * op("Sz", s₂)
-    #         Gj = exp(-im * τ/2 * hj)
-    #     end
-    #     push!(gates, Gj)
+            hj = 0.5 * J_effective * op("S+", s₁) * op("S-", s₂) + 0.5 * J_effective * op("S-", s₁) * op("S+", s₂) + J_effective * op("Sz", s₁) * op("Sz", s₂)
+            Gj = exp(-im * τ/2 * hj)
+            push!(gates, Gj)
+        end
+    end
 
 
-    #     # Add two-site gate for next-nearest-neighbor interactions
-    #     hj_tmp = 1/2 * J2 * op("S+", s₁) * op("S-", s₃) + 1/2 * J2 * op("S-", s₁) * op("S+", s₃) + J2 * op("Sz", s₁) * op("Sz", s₃) 
-    #     Gj_tmp = exp(-im * τ/2 * hj_tmp)    
-    #     push!(gates, Gj_tmp)
-    # end
+    # Add two-qubit gates for nearest-neighbor interactions along the horizontal direction
+    for offset in 1:5
+        for index in offset:5:N-5
+            s₁ = s[index]
+            s₂ = s[index + 4]
 
-    # # Add the last gate for the last two sites
-    # s₁ = s[N - 1]
-    # s₂ = s[N]
-    # if (N - 1) % 2 == 1
-    #     hj = 1/2 * J1 * (1 + delta) * op("S+", s₁) * op("S-", s₂) + 1/2 * J1 * (1 + delta) * op("S-", s₁) * op("S+", s₂) + J1 * (1 + delta) * op("Sz", s₁) * op("Sz", s₂)
-    #     Gj = exp(-im * τ/2 * hj)
-    # else
-    #     hj = 1/2 * J1 * (1 - delta) * op("S+", s₁) * op("S-", s₂) + 1/2 * J1 * (1 - delta) * op("S-", s₁) * op("S+", s₂) + J1 * (1 - delta) * op("Sz", s₁) * op("Sz", s₂)
-    #     Gj = exp(-im * τ/2 * hj)
-    # end
-    # push!(gates, Gj)
+            hj = 0.5 * J2 * op("S+", s₁) * op("S-", s₂) + 0.5 * J2 * op("S-", s₁) * op("S+", s₂) + J2 * op("Sz", s₁) * op("Sz", s₂)
+            Gj = exp(-im * τ/2 * hj)
+            push!(gates, Gj)
+        end
+    end
+
+
+    # Add reverse gates due to the the symmetric Trotter decomposition
+    append!(gates, reverse(gates))
+    #**************************************************************************************************************
+    #************************************************************************************************************** 
+
     
-    # # Add reverse gates due to the the symmetric Trotter decomposition
-    # append!(gates, reverse(gates))
 
     
-
-
     # # 08/14/2024
     # # Apply two perturbations to restore the translational invariance of the system in the existence of the dimmerized interactions
     # # Assuming the number of sites is even
