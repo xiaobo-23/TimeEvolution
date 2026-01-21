@@ -79,7 +79,7 @@ let
             os .+= 0.5 * J_effective, "S+", i, "S-", j 
             os .+= 0.5 * J_effective, "S-", i, "S+", j
             os .+= J_effective, "Sz", i, "Sz", j
-            # @show i, x₁, y₁, j, x₂, y₂, dimerization_sign, J_effective
+            @info "Bond" site_i=i site_j=j type="Nearest neighbor" dimerization=dimerization_sign J=J_effective
         end
         
 
@@ -88,6 +88,7 @@ let
             os .+= 0.5 * J2, "S+", i, "S-", j 
             os .+= 0.5 * J2, "S-", i, "S+", j 
             os .+= J2, "Sz", i, "Sz", j 
+            @info "Bond" site_i=i site_j=j type="Next-nearest neighbor" J=J2
         end
 
 
@@ -96,6 +97,7 @@ let
             os .+= 0.5 * Jp, "S+", i, "S-", j 
             os .+= 0.5 * Jp, "S-", i, "S+", j
             os .+= Jp, "Sz", i, "Sz", j
+            @info "Bond" site_i=i site_j=j type="Vertical" J=Jp
         end
     end
 
@@ -182,50 +184,45 @@ let
     #************************************************************************************************************** 
 
     
+    #**************************************************************************************************************
+    #************************************************************************************************************** 
+    # Applying a local perturbation to copies of ground-state wave function and time evolve 
+    # the perturbed wave functions
+
+
+    # Define reference sites in the unit cell near the center of the ladder
+    center_x = div(Nx, 2)
+    references = [
+        2 * (center_x - 2) + 1,  # reference₁
+        2 * (center_x - 1),      # reference₂
+        2 * (center_x - 1) + 1,  # reference₃
+        2 * center_x             # reference₄
+    ]
 
     
-    # # 08/14/2024
-    # # Apply two perturbations to restore the translational invariance of the system in the existence of the dimmerized interactions
-    # # Assuming the number of sites is even
-    # center = div(N, 2)
-    # center_odd = center - 1
-    # @show center, center_odd
-    # ψ_odd = deepcopy(ψ)
-    # ψ_copy = deepcopy(ψ)
+    # Create perturbed copies of the ground state
+    perturbed_psi = [deepcopy(ψ) for _ in 1:length(references)]
+    
+    
+    # Apply Sz perturbation to each copy at the corresponding reference site
+    for (i, ref) in enumerate(references)
+        perturbed_psi[i] = apply(op("Sz", s[ref]), perturbed_psi[i]; cutoff)
+        normalize!(perturbed_psi[i])
+    end
 
 
-    # # Apply a local operator Sz to the two sites at the center of the chain
-    # local_op = op("Sz", s[center])
-    # ψ = apply(local_op, ψ; cutoff)  
-    # # normalize!(ψ)
 
-    # # Calculate the physical observables at different time steps
-    # # @t=0
-    # Sz₁ = expect(ψ, "Sz"; sites = 1 : N)
-    # Czz₁ = correlation_matrix(ψ, "Sz", "Sz"; sites = 1 : N)
-    # @show Sz₁
+    # Calculate the physical observables at different time steps
+    Sz₁ = expect(perturbed_psi[1], "Sz"; sites = 1 : N)
+    Sz₂ = expect(perturbed_psi[2], "Sz"; sites = 1 : N)
+    # Czz₁ = correlation_matrix(perturbed_psi[1], "Sz", "Sz"; sites = 1 : N)
+    @show Sz₁
+    @show Sz₂
     # @show Czz₁
 
 
-
-    # local_operator_odd = op("Sz", s[center_odd])
-    # ψ_odd = apply(local_operator_odd, ψ_odd; cutoff)
-    # # normalize!(ψ_odd)
-
-    # # local_op = op("Sz", s[center])
-    # # @show typeof(local_op)
-    # # newA = local_op * ψ[center]
-    # # newA = noprime(newA)
-    # # ψ[center] = newA
-
-    # # os_local = OpSum()
-    # # os_local += 1/2, "Sz", center
-    # # local_op = MPO(os_local, s)
-    # # ψ = apply(local_op, ψ; cutoff)
-    # # normalize!(ψ)
    
     
-    # # 08/14/2024
     # # Calculate the physical observables at different time steps
     # # @t>0
     # Czz = Matrix{ComplexF64}(undef, Int(ttotal / τ), N * N)
