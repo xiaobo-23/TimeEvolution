@@ -57,7 +57,7 @@ let
 
 
     # Make an array of site indices
-    s = siteinds("S=1/2", N; conserve_qns=true)
+    s = siteinds("S=1/2", N; conserve_qns=false)
 
 
     # Construct the Hamiltonian using OpSum
@@ -113,17 +113,17 @@ let
     
 
 
-    # Define parameters that are used in the DMRG optimization process
-    println("\n" * repeat("=", 200))
-    println("Running DMRG algorithms to obtain the ground state of the J₁-J₂-δ Heisenberg ladder model...")
-    println(repeat("=", 200))
-    nsweeps = 10
-    maxdim = [20, 50, 200, 1000]
-    eigsolve_krylovdim = 100
-    E, ψ = dmrg(Hamiltonian, ψ₀; nsweeps, maxdim, cutoff, eigsolve_krylovdim)
-    Sz₀ = expect(ψ, "Sz"; sites=1:N)
-    Czz₀ = correlation_matrix(ψ, "Sz", "Sz"; sites=1:N)
-    println(repeat("=", 200))
+    # # Define parameters that are used in the DMRG optimization process
+    # println("\n" * repeat("=", 200))
+    # println("Running DMRG algorithms to obtain the ground state of the J₁-J₂-δ Heisenberg ladder model...")
+    # println(repeat("=", 200))
+    # nsweeps = 2
+    # maxdim = [20, 50, 200, 1000]
+    # eigsolve_krylovdim = 100
+    # E, ψ = dmrg(Hamiltonian, ψ₀; nsweeps, maxdim, cutoff, eigsolve_krylovdim)
+    # Sz₀ = expect(ψ, "Sz"; sites=1:N)
+    # Czz₀ = correlation_matrix(ψ, "Sz", "Sz"; sites=1:N)
+    # println(repeat("=", 200))
     #**************************************************************************************************************
     #************************************************************************************************************** 
 
@@ -188,7 +188,8 @@ let
     #************************************************************************************************************** 
     # Applying a local perturbation to copies of ground-state wave function and time evolve 
     # the perturbed wave functions
-
+    # ψ = randomMPS(s, states; linkdims = 50)       # Initialize a random MPS
+    ψ = MPS(s, n -> isodd(n) ? "Up" : "Dn") 
 
     # Define reference sites in the unit cell near the center of the ladder
     center_x = div(Nx, 2)
@@ -198,7 +199,7 @@ let
         2 * (center_x - 1) + 1,  # reference₃
         2 * center_x             # reference₄
     ]
-
+    @show references
     
     # Create perturbed copies of the ground state
     perturbed_psi = [deepcopy(ψ) for _ in 1:length(references)]
@@ -206,104 +207,134 @@ let
     
     # Apply Sz perturbation to each copy at the corresponding reference site
     for (i, ref) in enumerate(references)
-        perturbed_psi[i] = apply(op("Sz", s[ref]), perturbed_psi[i]; cutoff)
+        perturbation = op("Sx", s[ref])
+        perturbed_psi[i] = apply(perturbation, perturbed_psi[i]; cutoff)
         normalize!(perturbed_psi[i])
     end
 
 
-
     # Calculate the physical observables at different time steps
+    Sz₀ = expect(ψ, "Sz"; sites = 1 : N)
     Sz₁ = expect(perturbed_psi[1], "Sz"; sites = 1 : N)
     Sz₂ = expect(perturbed_psi[2], "Sz"; sites = 1 : N)
+    @show Sz₀[6 : 12]
+    @show Sz₁[6 : 12]
+    @show Sz₂[6 : 12]
+
+
+    # Czz₀ = correlation_matrix(ψ, "Sz", "Sz"; sites = 1 : N)
     # Czz₁ = correlation_matrix(perturbed_psi[1], "Sz", "Sz"; sites = 1 : N)
-    @show Sz₁
-    @show Sz₂
-    # @show Czz₁
-
-
+    # Czz₂ = correlation_matrix(perturbed_psi[2], "Sz", "Sz"; sites = 1 : N)
+    # @show Czz₀[6, 6 : 12]
+    # @show Czz₁[6, 6 : 12]
+    # @show Czz₂[6, 6 : 12]
+    #**************************************************************************************************************
+    #************************************************************************************************************** 
    
+
+
+    #**************************************************************************************************************
+    #**************************************************************************************************************
+    # Time evolve the original and perturbed wave functions and record time-dependent observables
+
+
+    # Initialize arrays to store time-dependent observables
+    time_steps = Int(ttotal / τ)
+    Sz₀ = Matrix{ComplexF64}(undef, time_steps, N)
+    Sz₁ = Matrix{ComplexF64}(undef, time_steps, N)
+    Sz₂ = Matrix{ComplexF64}(undef, time_steps, N)
+    Sz₃ = Matrix{ComplexF64}(undef, time_steps, N)
+    Sz₄ = Matrix{ComplexF64}(undef, time_steps, N)
+    Czz₁ = Matrix{ComplexF64}(undef, time_steps, N)
+    Czz₂ = Matrix{ComplexF64}(undef, time_steps, N)
+    Czz₃ = Matrix{ComplexF64}(undef, time_steps, N)
+    Czz₄ = Matrix{ComplexF64}(undef, time_steps, N)  
+    chi₀ = Matrix{Int}(undef, time_steps, N - 1)  
+    chi₁ = Matrix{Int}(undef, time_steps, N - 1)
+    chi₂ = Matrix{Int}(undef, time_steps, N - 1)
+    chi₃ = Matrix{Int}(undef, time_steps, N - 1)
+    chi₄ = Matrix{Int}(undef, time_steps, N - 1)
+    output_file = "heisenberg_tebd_time$(ttotal)_J2$(J2)_Jp$(Jp)_delta$(delta).h5"    
+
+
+
+    # Time evovle the original and perturbed wave functions
+    for t in 0 : τ : ttotal
+        index = Int(round(t / τ)) + 1
+        t ≈ ttotal && break
+        
+        
+        # Time evolve the unperturbed wave function
+        ψ = apply(gates, ψ; cutoff)
+        normalize!(ψ)
+             
+        for i in 1 : length(references)
+            perturbed_psi[i] = apply(gates, perturbed_psi[i]; cutoff)
+            normalize!(perturbed_psi[i])
+        end
+        @info "Time evolution" current_time=t+τ step=index total_steps=time_steps max_bond_dim=maximum(linkdims(ψ))
+
+
+
+        # Record time-dependent physical observables and bond dimensions
+        Sz₀[index, :] = expect(ψ, "Sz"; sites = 1 : N)
+        Sz₁[index, :] = expect(perturbed_psi[1], "Sz"; sites = 1 : N)
+        Sz₂[index, :] = expect(perturbed_psi[2], "Sz"; sites = 1 : N)
+        Sz₃[index, :] = expect(perturbed_psi[3], "Sz"; sites = 1 : N)
+        Sz₄[index, :] = expect(perturbed_psi[4], "Sz"; sites = 1 : N)
+
+        chi₀[index, :] = linkdims(ψ)
+        chi₁[index, :] = linkdims(perturbed_psi[1])
+        chi₂[index, :] = linkdims(perturbed_psi[2])
+        chi₃[index, :] = linkdims(perturbed_psi[3])
+        chi₄[index, :] = linkdims(perturbed_psi[4])
+
+
+        # Compute time-dependent correlation functions
+        for site_index in collect(1 : N)
+            measurement_os = OpSum()
+            measurement_os += "Sz", site_index
+            measurement_mpo = MPO(measurement_os, s)
+
+            Czz₁[index, site_index] = inner(ψ', measurement_mpo, perturbed_psi[1])
+            Czz₂[index, site_index] = inner(ψ', measurement_mpo, perturbed_psi[2])
+            Czz₃[index, site_index] = inner(ψ', measurement_mpo, perturbed_psi[3])
+            Czz₄[index, site_index] = inner(ψ', measurement_mpo, perturbed_psi[4])
+        end
+
+        # Create/update HDF5 file using "cw" mode (create or read-write if exists)
+        h5open(output_file, "cw") do file
+            for (name, data) in [("Czz1", Czz₁), ("Czz2", Czz₂), ("Czz3", Czz₃), ("Czz4", Czz₄)]
+                haskey(file, name) && delete_object(file, name)
+                file[name] = data
+            end
+        end
+    end
+
+    #**************************************************************************************************************
+    #**************************************************************************************************************
     
-    # # Calculate the physical observables at different time steps
-    # # @t>0
-    # Czz = Matrix{ComplexF64}(undef, Int(ttotal / τ), N * N)
-    # Czz_odd = Matrix{ComplexF64}(undef, Int(ttotal / τ), N * N)
-    # Czz_even = Matrix{ComplexF64}(undef, Int(ttotal / τ), N * N)
-    # Czz_unequaltime_odd  = Matrix{ComplexF64}(undef, Int(ttotal / τ), N) 
-    # Czz_unequaltime_even = Matrix{ComplexF64}(undef, Int(ttotal / τ), N)
-    # chi = Matrix{Float64}(undef, Int(ttotal / τ), N - 1)
-    # Sz_all = Matrix{ComplexF64}(undef, Int(ttotal / τ), N)
-    # Sz_all_odd = Matrix{ComplexF64}(undef, Int(ttotal / τ), N)
-    # Sz_all_even = Matrix{ComplexF64}(undef, Int(ttotal / τ), N)
-    # @show size(Czz_unequaltime_odd), size(Czz_unequaltime_even), size(chi)
+
     
+    # Save the final wave functions and observables to an HDF5 file
+    h5open(output_file, "cw") do file
+        write(file, "Psi0", ψ)
+        write(file, "Psi1", perturbed_psi[1])
+        write(file, "Psi2", perturbed_psi[2])
+        write(file, "Psi3", perturbed_psi[3])
+        write(file, "Psi4", perturbed_psi[4])
+        write(file, "Sz0", Sz₀)
+        write(file, "Sz1", Sz₁)
+        write(file, "Sz2", Sz₂)
+        write(file, "Sz3", Sz₃)
+        write(file, "Sz4", Sz₄)
+        write(file, "chi0", chi₀)
+        write(file, "chi1", chi₁)
+        write(file, "chi2", chi₂)
+        write(file, "chi3", chi₃)
+        write(file, "chi4", chi₄)
+    end
 
-    # # Time evovle the original and perturbed wave functions
-    # for t in 0 : τ : ttotal
-    #     index = round(Int, t / τ) + 1
-    #     @show index
-    #     Sz = expect(ψ, "Sz"; sites = center)
-    #     println("t = $t, Sz = $Sz")
-
-    #     t ≈ ttotal && break
-    #     # Time evolve the perturbed wave function with the perturbation applied on the even site in the center of the chain
-    #     ψ = apply(gates, ψ; cutoff)
-    #     normalize!(ψ)
-    #     chi[index, :] = linkdims(ψ)
-    #     @show linkdims(ψ)
-
-    #     # Time evolve the perturbed wave function with the perturbation applied on the odd site in the center of the chain
-    #     ψ_odd = apply(gates, ψ_odd; cutoff)
-    #     normalize!(ψ_odd)
-
-    #     # Time evolve the original wave function
-    #     ψ_copy = apply(gates, ψ_copy; cutoff)
-    #     normalize!(ψ_copy)
-
-    #     Czz[index, :] = correlation_matrix(ψ, "Sz", "Sz"; sites = 1 : N)
-    #     Czz_odd[index, :] = correlation_matrix(ψ_odd, "Sz", "Sz"; sites = 1 : N)    
-    #     Czz_even[index, :] = correlation_matrix(ψ_copy, "Sz", "Sz"; sites = 1 : N)  
-    #     Sz_all[index, :] = expect(ψ_copy, "Sz"; sites = 1 : N)
-    #     Sz_all_odd[index, :] = expect(ψ_odd, "Sz"; sites = 1 : N); @show expect(ψ_odd, "Sz"; sites = 1 : N)
-    #     Sz_all_even[index, :] = expect(ψ, "Sz"; sites = 1 : N)
-
-
-    #     # Calculate the unequaltime correlation function
-    #     for site_index in collect(1 : N)
-    #         tmp_os = OpSum()
-    #         tmp_os += "Sz", site_index
-    #         tmp_MPO = MPO(tmp_os, s)
-    #         Czz_unequaltime_even[index, site_index] = inner(ψ_copy', tmp_MPO, ψ)
-    #         Czz_unequaltime_odd[index, site_index] = inner(ψ_copy', tmp_MPO, ψ_odd)
-    #     end
-
-    #     # # Create a HDF5 file and save the unequal-time spin correlation to the file at every time step
-    #     # h5open("/pscratch/sd/x/xiaobo23/TensorNetworks/spectral_function/J1_J2_Dimmerization/Delta0/data/Heisenberg_Dimerized_TEBD_Time$(ttotal)_J2_$(J2).h5", "w") do file
-    #     #     if haskey(file, "Czz_unequaltime_odd")
-    #     #         delete_object(file, "Czz_unequaltime_odd")
-    #     #     end
-    #     #     write(file, "Czz_unequaltime_odd",  Czz_unequaltime_odd)
-
-    #     #     if haskey(file, "Czz_unequaltime_even")
-    #     #         delete_object(file, "Czz_unequaltime_even")
-    #     #     end
-    #     #     write(file, "Czz_unequaltime_even", Czz_unequaltime_even)
-    #     # end
-    # end
-
-    # h5open("/pscratch/sd/x/xiaobo23/TensorNetworks/spectral_function/J1_J2_Dimmerization/Delta0/data/Heisenberg_Dimerized_TEBD_Time$(ttotal)_J2_$(J2).h5", "r+") do file
-    #     write(file, "Psi", ψ)
-    #     write(file, "Sz T=0", Sz₀)
-    #     write(file, "Czz T=0", Czz₀)
-    #     write(file, "Sz Perturbed", Sz₁)
-    #     write(file, "Czz Perturbed", Czz₁)
-    #     write(file, "Czz", Czz)
-    #     write(file, "Czz Odd", Czz_odd) 
-    #     write(file, "Czz Even", Czz_even)
-    #     write(file, "Sz", Sz_all)
-    #     write(file, "Sz Odd", Sz_all_odd)
-    #     write(file, "Sz Even", Sz_all_even)
-    #     write(file, "Bond", chi)
-    # end
 
     return
 end
