@@ -1,5 +1,5 @@
 # 1/20/2026
-# Using time-evolving block decimation (TEBD) to simulate real-time dynamics of J₁-J₂-δ Heisenberg ladder 
+# Time-evolving block-decimation  (TEBD) for simulation of real-time dynamics of the J₁-J₂-δ Heisenberg ladder 
 
 using ITensors 
 using ITensorMPS
@@ -7,8 +7,8 @@ using LinearAlgebra
 using MKL
 using HDF5
 
-include("lattice.jl")
 
+include("lattice.jl")
 
 
 # Set up the number of threads for parallel computing 
@@ -18,7 +18,6 @@ OMP_NUM_THREADS = 8
 @info "BLAS Configuration" BLAS.get_config()
 @info "Number of BLAS threads" BLAS.get_num_threads()
 @info "Number of Julia threads" Threads.nthreads()
-
 
 
 # Define the model parameters as well as the time evolution parameters
@@ -32,7 +31,6 @@ const delta = 0.04
 const τ = 0.05
 const ttotal = 0.1
 const cutoff = 1E-10
-
 
 
 let
@@ -50,7 +48,6 @@ let
     #**************************************************************************************************************
     #************************************************************************************************************** 
     # Running DMRG simulation to obtain the ground-state wave function
-    
     
     # Generate the ladder lattice
     lattice = ladder_lattice(Nx, Ny; yperiodic=false)    
@@ -102,7 +99,7 @@ let
     end
 
 
-    # Construct the Hamiltonian MPO and initialize the wave function as a random MPS
+    # Construct the Hamiltonian MPO
     Hamiltonian = MPO(os, s)
     
 
@@ -189,7 +186,7 @@ let
     # Applying a local perturbation to copies of ground-state wave function and time evolve 
     # the perturbed wave functions
     # ψ = randomMPS(s, states; linkdims = 50)       # Initialize a random MPS
-    ψ = MPS(s, n -> isodd(n) ? "Up" : "Dn") 
+    # ψ = MPS(s, n -> isodd(n) ? "Up" : "Dn") 
 
     # Define reference sites in the unit cell near the center of the ladder
     center_x = div(Nx, 2)
@@ -201,9 +198,9 @@ let
     ]
     @show references
     
+    
     # Create perturbed copies of the ground state
     perturbed_psi = [deepcopy(ψ) for _ in 1:length(references)]
-    
     
     # Apply Sz perturbation to each copy at the corresponding reference site
     for (i, ref) in enumerate(references)
