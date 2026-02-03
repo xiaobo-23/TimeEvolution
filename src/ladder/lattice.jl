@@ -63,16 +63,14 @@ end
 const Lattice = Vector{LatticeBond}
 
 
+"""
+    ladder_lattice(Nx::Int, Ny::Int; kwargs...)::Lattice
 
-# """
-#     ladder_lattice(Nx::Int, Ny::Int; kwargs...)::Lattice
-
-#     Return a Lattice (array of LatticeBond
-#     objects) corresponding to the ladder 
-# 	lattice of dimensions (Nx, Ny).
-#     By default the lattice has open boundary along x direction,
-# 	and periodic boundary along y direction.
-# """
+    Return a Lattice (array of LatticeBond objects) corresponding to 
+	the ladder lattice of dimensions (Nx, Ny).
+	The number of sites is N = Nx * Ny - 2 due to the missing corners.
+    By default the lattice has open boundary along x direction.
+"""
 
 function ladder_lattice(Nx::Int, Ny::Int; yperiodic=true)::Lattice
 	"""
@@ -81,43 +79,55 @@ function ladder_lattice(Nx::Int, Ny::Int; yperiodic=true)::Lattice
 	"""
 
 	# Compute the number of sites and bonds
-	N = Nx * Ny
-	Nbond = 2 * Nx * Ny + Nx - 6
+	N = Nx * Ny - 2
+	Nbond = 2 * N + Nx - 8
 
 
 	# Initialize the lattice (a vector of lattice bonds)
   	latt = Lattice(undef, Nbond)
   	b = 0
+	
+	# Build bonds for ladder lattice
 	for n in 1:N
-		x = div(n - 1, Ny) + 1
-		y = mod(n - 1, Ny) + 1
-
-		"""
-			Set up the nearest neighbor bonds
-		"""
-		# Nearest-neighbor bond along x direction
-		if n <= N - 2
-			latt[b += 1] = LatticeBond(n, n + 2)
+		if n==1
+			x = div(n - 1, Ny) + 1
+			y = mod(n - 1, Ny) + 1
+		else
+			x = div(n - 2, Ny) + 2
+			y = mod(n - 2, Ny) + 1
 		end
+		@show n, x, y
+		
+		"""Set up the nearest neighbor bonds"""
 
-		# Nearest-neighbor bond along y direction
-		if y == 1
+		if n == 1
 			latt[b += 1] = LatticeBond(n, n + 1)
+		else
+			# Nearest-neighbor bond along x direction
+			if n <= N - 2
+				latt[b += 1] = LatticeBond(n, n + 2)
+			end
+
+			# Nearest-neighbor bond along y direction
+			if y == 1 && n != N 
+				latt[b += 1] = LatticeBond(n, n + 1)
+			end
 		end
+		
 
+		"""Set up the next-nearest neighbor bonds"""
 
-		"""
-			Set up the next-nearest neighbor bonds
-		"""
-		if n <= N - 4
-			latt[b += 1] = LatticeBond(n, n + 4)
+		if n == 1
+			latt[b += 1] = LatticeBond(n, n + 3)
+		else
+			if n <= N - 4
+				latt[b += 1] = LatticeBond(n, n + 4)
+			end
 		end
 	end
 
-	if length(latt) != Nbond
-		error("\nError in constructing ladder lattice: number of bonds mismatch!")
-	end
+	# Validate bond count & make sure the bonds are correctly set up
+	@assert length(latt) == Nbond "Bond count mismatch in ladder lattice: expected $Nbond, got $(length(latt))"
 
-	# @show latt
 	return latt
 end
