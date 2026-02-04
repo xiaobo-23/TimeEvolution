@@ -23,7 +23,7 @@ OMP_NUM_THREADS = 8
 # Define the model parameters as well as the time evolution parameters
 const Nx = 15
 const Ny = 2
-const N = Nx * Ny
+const N = Nx * Ny - 2   # Total number of sites in the ladder lattice by removing the corner sites
 const J1 = 1.0
 const J2 = 0.35
 const Jp=0.0
@@ -59,7 +59,6 @@ let
     # Make an array of site indices
     s = siteinds("S=1/2", N; conserve_qns=false)
 
-
     # Construct the Hamiltonian using OpSum
     os = OpSum()
     for bond in lattice 
@@ -70,7 +69,7 @@ let
             os .+= 0.5 * J1 * (1 + delta), "S+", i, "S-", j 
             os .+= 0.5 * J1 * (1 + delta), "S-", i, "S+", j 
             os .+= J1 * (1 + delta), "Sz", i, "Sz", j 
-            @info "Bond" site_i=i site_j=j type="Nearest neighbor" dimerization=1 J=J1*(1 + delta)
+            # @info "Bond" site_i=i site_j=j type="Nearest neighbor" dimerization=1 J=J1*(1 + delta)
         else
             if abs(i - j) == 2
                 x₁, x₂ = div(i - 2, Ny) + 2, div(j - 2, Ny) + 2
@@ -84,7 +83,7 @@ let
                 os .+= 0.5 * J_effective, "S+", i, "S-", j 
                 os .+= 0.5 * J_effective, "S-", i, "S+", j
                 os .+= J_effective, "Sz", i, "Sz", j
-                @info "Bond" site_i=i site_j=j type="Nearest neighbor" dimerization=dimerization_sign J=J_effective
+                # @info "Bond" site_i=i site_j=j type="Nearest neighbor" dimerization=dimerization_sign J=J_effective
             end
         end
 
@@ -106,26 +105,26 @@ let
     end
 
 
-    # # Construct the Hamiltonian MPO
-    # Hamiltonian = MPO(os, s)
+    # Construct the Hamiltonian MPO
+    Hamiltonian = MPO(os, s)
     
-    # # Initialize the wave function as an MPS
-    # states = [isodd(n) ? "Up" : "Dn" for n in 1:N]
-    # ψ₀ = randomMPS(s, states; linkdims = 8)     # Initialize a random MPS
-    # # ψ₀ = MPS(s, n -> isodd(n) ? "Up" : "Dn")  # Initialize a prodcut state 
+    # Initialize the wave function as an MPS
+    states = [isodd(n) ? "Up" : "Dn" for n in 1:N]
+    ψ₀ = randomMPS(s, states; linkdims = 8)     # Initialize a random MPS
+    # ψ₀ = MPS(s, n -> isodd(n) ? "Up" : "Dn")  # Initialize a prodcut state 
 
 
-    # # Define parameters that are used in the DMRG optimization process
-    # println("\n" * repeat("=", 200))
-    # println("Running DMRG algorithms to obtain the ground state of the J₁-J₂-δ Heisenberg ladder model...")
-    # println(repeat("=", 200))
-    # nsweeps = 20
-    # maxdim = [20, 50, 200, 1000]
-    # eigsolve_krylovdim = 100
-    # E, ψ = dmrg(Hamiltonian, ψ₀; nsweeps, maxdim, cutoff, eigsolve_krylovdim)
-    # Sz₀ = expect(ψ, "Sz"; sites=1:N)
-    # Czz₀ = correlation_matrix(ψ, "Sz", "Sz"; sites=1:N)
-    # println(repeat("=", 200))
+    # Define parameters that are used in the DMRG optimization process
+    println("\n" * repeat("=", 200))
+    println("Running DMRG algorithms to obtain the ground state of the J₁-J₂-δ Heisenberg ladder model...")
+    println(repeat("=", 200))
+    nsweeps = 2
+    maxdim = [20, 50, 200, 1000]
+    eigsolve_krylovdim = 50
+    E, ψ = dmrg(Hamiltonian, ψ₀; nsweeps, maxdim, cutoff, eigsolve_krylovdim)
+    Sz₀ = expect(ψ, "Sz"; sites=1:N)
+    Czz₀ = correlation_matrix(ψ, "Sz", "Sz"; sites=1:N)
+    println(repeat("=", 200))
 
 
     # # Save the final wave functions and observables to an HDF5 file
@@ -142,61 +141,95 @@ let
 
 
    
-    # #**************************************************************************************************************
-    # #************************************************************************************************************** 
-    # # Construct the TEBD gates for time evolution
-    # gates = ITensor[]
+    #**************************************************************************************************************
+    #************************************************************************************************************** 
+    # Construct the TEBD gates for time evolution
+    gates = ITensor[]
     
-    # # Add two-qubit gate for interactions along the vertical direction 
-    # for index in 1 : 2 : N-1 
-    #     s₁ = s[index]
-    #     s₂ = s[index + 1]
+    # Set up two-qubit gates for nearest-neighbot interactions along the vertical direction 
+    for index in 2 : 2 : N - 2
+        # Check the largest index to avoid out-of-bound error
+        if index + 1 > N 
+            break
+        end
 
-    #     hj = 1/2 * Jp * op("S+", s₁) * op("S-", s₂) + 1/2 * Jp * op("S-", s₁) * op("S+", s₂) + Jp * op("Sz", s₁) * op("Sz", s₂)
-    #     Gj = exp(-im * τ/2 * hj)
-    #     push!(gates, Gj)
-    #     @info "Vertical bond gate added" site1=index site2=index+1
-    # end
+        s₁ = s[index]
+        s₂ = s[index + 1]
+
+        hj = 1/2 * Jp * op("S+", s₁) * op("S-", s₂) + 1/2 * Jp * op("S-", s₁) * op("S+", s₂) + Jp * op("Sz", s₁) * op("Sz", s₂)
+        Gj = exp(-im * τ/2 * hj)
+        push!(gates, Gj)
+        @info "Two-qubit gate for vertical bond added" site1=index site2=index+1
+    end
 
 
-    # # Add two-qubit gates for nearest-neighbor interactions along the horizontal direction
-    # for offset in 1:3
-    #     for index in offset:3:N-2
-    #         s₁ = s[index]
-    #         s₂ = s[index + 2]
+    # Set up two-qubit gates for nearest-neighbor interactions along the horizontal direction
+    # Set up the first gate containing the first site separately
+    s₁ = s[1]
+    s₂ = s[2]
+
+    hj = 0.5 * J1 * (1 + delta) * op("S+", s₁) * op("S-", s₂) + 0.5 * J1 * (1 + delta) * op("S-", s₁) * op("S+", s₂) + J1 * (1 + delta) * op("Sz", s₁) * op("Sz", s₂)
+    Gj = exp(-im * τ/2 * hj)
+    push!(gates, Gj)
+    @info "Two-qubit gate for nearest-neighbor bond added" site1=1 site2=2 J1=J1*(1+delta)
+
+    for offset in [3, 2]
+        for index in offset : 3 : N - 2
+            # Check the largest index to avoid out-of-bound error
+            if index + 2 > N 
+                break
+            end
+
+            s₁ = s[index]
+            s₂ = s[index + 2]
             
-    #         x₁ = div(index - 1, Ny) + 1
-    #         y₁ = mod(index - 1, Ny) + 1
+            x₁ = div(index - 2, Ny) + 2
+            y₁ = mod(index - 2, Ny) + 1
             
-    #         dimerization_sign = (y₁ == 1) == isodd(x₁) ? 1 : -1
-    #         J_effective = J1 * (1 + dimerization_sign * delta)
+            dimerization_sign = (y₁ == 1) == isodd(x₁) ? 1 : -1
+            J_effective = J1 * (1 + dimerization_sign * delta)
 
-    #         hj = 0.5 * J_effective * op("S+", s₁) * op("S-", s₂) + 0.5 * J_effective * op("S-", s₁) * op("S+", s₂) + J_effective * op("Sz", s₁) * op("Sz", s₂)
-    #         Gj = exp(-im * τ/2 * hj)
-    #         push!(gates, Gj)
-    #         @info "Horizontal bond gate added" site1=index site2=index+2 J=J_effective
-    #     end
-    # end
-
-
-    # # Add two-qubit gates for nearest-neighbor interactions along the horizontal direction
-    # for offset in 1:5
-    #     for index in offset:5:N-5
-    #         s₁ = s[index]
-    #         s₂ = s[index + 4]
-
-    #         hj = 0.5 * J2 * op("S+", s₁) * op("S-", s₂) + 0.5 * J2 * op("S-", s₁) * op("S+", s₂) + J2 * op("Sz", s₁) * op("Sz", s₂)
-    #         Gj = exp(-im * τ/2 * hj)
-    #         push!(gates, Gj)
-    #         @info "Next-nearest neighbor bond gate added" site1=index site2=index+4 J=J2
-    #     end
-    # end
+            hj = 0.5 * J_effective * op("S+", s₁) * op("S-", s₂) + 0.5 * J_effective * op("S-", s₁) * op("S+", s₂) + J_effective * op("Sz", s₁) * op("Sz", s₂)
+            Gj = exp(-im * τ/2 * hj)
+            push!(gates, Gj)
+            @info "Two-qubit gate for nearest-neighbor bond added" site1=index site2=index+2 J=J_effective
+        end
+    end
 
 
-    # # Add reverse gates due to the the symmetric Trotter decomposition
-    # append!(gates, reverse(gates))
-    # #**************************************************************************************************************
-    # #************************************************************************************************************** 
+    # Set up two-qubit gayes for next-nearest-neighbor interactions
+    # Set up the first gate containing the first site separately
+    s₁ = s[1]
+    s₂ = s[4]
+    hj = 0.5 * J2 * op("S+", s₁) * op("S-", s₂) + 0.5 * J2 * op("S-", s₁) * op("S+", s₂) + J2 * op("Sz", s₁) * op("Sz", s₂)
+    Gj = exp(-im * τ/2 * hj)
+    push!(gates, Gj)
+    # @info "Two-qubit gate for next-nearest-neighbor bond added" site1=1 site2=4 J=J2
+
+    starting_points = [5, 2, 3, 4]
+
+    for offset in starting_points
+        for index in offset : 5 : N - 4
+            # Check the largest index to avoid out-of-bound error
+            if index + 4 > N 
+                break 
+            end
+
+            s₁ = s[index]
+            s₂ = s[index + 4]
+
+            hj = 0.5 * J2 * op("S+", s₁) * op("S-", s₂) + 0.5 * J2 * op("S-", s₁) * op("S+", s₂) + J2 * op("Sz", s₁) * op("Sz", s₂)
+            Gj = exp(-im * τ/2 * hj)
+            push!(gates, Gj)
+            # @info "Two-qubit gate for next-nearest-neighbor bond added" site1=index site2=index+4 J=J2
+        end
+    end
+
+
+    # Add reverse gates due to the the symmetric Trotter decomposition
+    append!(gates, reverse(gates))
+    #**************************************************************************************************************
+    #************************************************************************************************************** 
 
     
     # #**************************************************************************************************************

@@ -96,7 +96,7 @@ function ladder_lattice(Nx::Int, Ny::Int; yperiodic=true)::Lattice
 			x = div(n - 2, Ny) + 2
 			y = mod(n - 2, Ny) + 1
 		end
-		@show n, x, y
+		# @show n, x, y
 		
 		"""Set up the nearest neighbor bonds"""
 
