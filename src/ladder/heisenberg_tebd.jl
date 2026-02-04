@@ -232,50 +232,45 @@ let
     #************************************************************************************************************** 
 
     
-    # #**************************************************************************************************************
-    # #************************************************************************************************************** 
-    # # Applying a local perturbation to copies of ground-state wave function and time evolve 
-    # # the perturbed wave functions
-    # # ψ = randomMPS(s, states; linkdims = 50)       # Initialize a random MPS
-    # # ψ = MPS(s, n -> isodd(n) ? "Up" : "Dn") 
+    #**************************************************************************************************************
+    #************************************************************************************************************** 
+    # Applying a local perturbation to copies of ground-state wave function and time evolve 
+    # the perturbed wave functions
+    # ψ = randomMPS(s, states; linkdims = 50)       # Initialize a random MPS
+    # ψ = MPS(s, n -> isodd(n) ? "Up" : "Dn") 
 
-    # # Define reference sites in the unit cell near the center of the ladder
-    # center_x = div(Nx, 2)
-    # references = [
-    #     2 * (center_x - 2) + 1,  # reference₁
-    #     2 * (center_x - 1),      # reference₂
-    #     2 * (center_x - 1) + 1,  # reference₃
-    #     2 * center_x             # reference₄
-    # ]
-    # # @show references
+    # Define four reference sites at the center of the ladder lattice
+    center = div(N, 2)
+    references = iseven(center) ? (center:center+3) : (center-1:center+2)
+    @show references
     
     
-    # # Create perturbed copies of the ground state
-    # perturbed_psi = [deepcopy(ψ) for _ in 1:length(references)]
+    # Create perturbed copies of the ground state
+    perturbed_psi = [deepcopy(ψ) for _ in 1:length(references)]
     
-    # # Apply Sz perturbation to each copy at the corresponding reference site
-    # for (i, ref) in enumerate(references)
-    #     perturbation = op("Sx", s[ref])
-    #     perturbed_psi[i] = apply(perturbation, perturbed_psi[i]; cutoff)
-    #     normalize!(perturbed_psi[i])
-    # end
+    # Apply Sz perturbation to each copy at the corresponding reference site
+    for (i, ref) in enumerate(references)
+        perturbation = op("Sx", s[ref])
+        perturbed_psi[i] = apply(perturbation, perturbed_psi[i]; cutoff)
+        normalize!(perturbed_psi[i])
+    end
 
 
-    # # Calculate the physical observables at different time steps
-    # Sz₀ = expect(ψ, "Sz"; sites = 1 : N)
-    # Sz₁ = expect(perturbed_psi[1], "Sz"; sites = 1 : N)
-    # Sz₂ = expect(perturbed_psi[2], "Sz"; sites = 1 : N)
-    # @show Sz₀[6 : 12]
-    # @show Sz₁[6 : 12]
-    # @show Sz₂[6 : 12]
+    # Calculate the physical observables at different time steps
+    Sz₀ = expect(ψ, "Sz"; sites = 1 : N)
+    Sz₁ = expect(perturbed_psi[1], "Sz"; sites = 1 : N)
+    Sz₂ = expect(perturbed_psi[2], "Sz"; sites = 1 : N)
+    @show Sz₀[6 : 12]
+    @show Sz₁[6 : 12]
+    @show Sz₂[6 : 12]
 
 
-    # Czz₀ = correlation_matrix(ψ, "Sz", "Sz"; sites = 1 : N)
-    # Czz₁ = correlation_matrix(perturbed_psi[1], "Sz", "Sz"; sites = 1 : N)
-    # Czz₂ = correlation_matrix(perturbed_psi[2], "Sz", "Sz"; sites = 1 : N)
-    # @show Czz₀[6, 6 : 12]
-    # @show Czz₁[6, 6 : 12]
-    # @show Czz₂[6, 6 : 12]
+    Czz₀ = correlation_matrix(ψ, "Sz", "Sz"; sites = 1 : N)
+    Czz₁ = correlation_matrix(perturbed_psi[1], "Sz", "Sz"; sites = 1 : N)
+    Czz₂ = correlation_matrix(perturbed_psi[2], "Sz", "Sz"; sites = 1 : N)
+    @show Czz₀[6, 6 : 12]
+    @show Czz₁[6, 6 : 12]
+    @show Czz₂[6, 6 : 12]
     #**************************************************************************************************************
     #************************************************************************************************************** 
    
