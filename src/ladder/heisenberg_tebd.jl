@@ -8,7 +8,7 @@ using MKL
 using HDF5
 
 
-include("lattice.jl")
+include("../lattice.jl")
 
 
 # Set up the number of threads for parallel computing 
@@ -20,7 +20,7 @@ OMP_NUM_THREADS = 8
 @info "Number of Julia threads" Threads.nthreads()
 
 
-# Define the model parameters as well as the time evolution parameters
+# Define simulation parameters used to set up the Hamiltonian and TEBD time evolution
 const Nx = 50
 const Ny = 2
 const N = Nx * Ny - 2   # Total number of sites in the ladder lattice by removing the corner sites
@@ -47,8 +47,9 @@ let
     
     #**************************************************************************************************************
     #************************************************************************************************************** 
-    # Running DMRG simulation to obtain the ground-state wave function
-    
+    """
+        Running DMRG simulation to obtain the ground-state wave function
+    """
     
     # Generate the ladder lattice
     lattice = ladder_lattice(Nx, Ny; yperiodic=false)    
@@ -145,7 +146,10 @@ let
    
     #**************************************************************************************************************
     #************************************************************************************************************** 
-    # Construct the TEBD gates for time evolution
+    """
+        Setting up two-qubit gates for TEBD time evolution
+    """
+
     gates = ITensor[]
     
     # Set up two-qubit gates for nearest-neighbot interactions along the vertical direction 
@@ -236,6 +240,25 @@ let
     
     #**************************************************************************************************************
     #************************************************************************************************************** 
+    """
+        Time evolution of the original and perturbed wave functions using TEBD algorithm
+        Compute time-dependent observables and correlation functions
+    """
+
+    """
+        Pre-allocate arrays for time-dependent observables
+    """
+    time_steps = Int(ttotal / τ)
+    Sz  = [Matrix{ComplexF64}(undef, time_steps, N) for _ in 1:5]
+    Czz = [Matrix{ComplexF64}(undef, time_steps, N) for _ in 1:5]
+    chi = [Matrix{Int}(undef, time_steps, N - 1) for _ in 1:5]
+    
+    # Aliases for backward compatibility
+    Sz₀, Sz₁, Sz₂, Sz₃, Sz₄ = Sz
+    Czz₀, Czz₁, Czz₂, Czz₃, Czz₄ = Czz
+    chi₀, chi₁, chi₂, chi₃, chi₄ = chi
+
+    
     # Applying a local perturbation to copies of ground-state wave function and time evolve 
     # the perturbed wave functions
     # ψ = randomMPS(s, states; linkdims = 50)       # Initialize a random MPS
@@ -259,46 +282,28 @@ let
     end
 
 
-    # Calculate the physical observables at different time steps
-    Sz₀ = expect(ψ, "Sz"; sites = 1 : N)
-    Sz₁ = expect(perturbed_psi[1], "Sz"; sites = 1 : N)
-    Sz₂ = expect(perturbed_psi[2], "Sz"; sites = 1 : N)
-    @show Sz₀[references[1] - 7 : references[1] + 7]
-    @show Sz₁[references[1] - 7 : references[1] + 7]
-    @show Sz₂[references[1] - 7 : references[1] + 7]
+    # Measure the original and perturbed wave functoins before time evolution && check the effects of perturbations
+    Sz₀_initial = expect(ψ, "Sz"; sites = 1 : N)
+    Sz₁_initial = expect(perturbed_psi[1], "Sz"; sites = 1 : N)
+    Sz₂_initial = expect(perturbed_psi[2], "Sz"; sites = 1 : N)
+    @show Sz₀_initial[references[1] - 7 : references[1] + 7]
+    @show Sz₁_initial[references[1] - 7 : references[1] + 7]
+    @show Sz₂_initial[references[1] - 7 : references[1] + 7]
 
 
-    Czz₀ = correlation_matrix(ψ, "Sz", "Sz"; sites = 1 : N)
-    Czz₁ = correlation_matrix(perturbed_psi[1], "Sz", "Sz"; sites = 1 : N)
-    # Czz₂ = correlation_matrix(perturbed_psi[2], "Sz", "Sz"; sites = 1 : N)
-    @show Czz₀[references[1], references[1] - 7 : references[1] + 7]
-    @show Czz₁[references[1], references[1] - 7 : references[1] + 7]
-    # @show Czz₂[references[1], references[1] - 7 : references[1] + 7]
-    #**************************************************************************************************************
-    #************************************************************************************************************** 
+    Czz₀_initial = correlation_matrix(ψ, "Sz", "Sz"; sites = 1 : N)
+    Czz₁_initial = correlation_matrix(perturbed_psi[1], "Sz", "Sz"; sites = 1 : N)
+    # Czz₂_initial = correlation_matrix(perturbed_psi[2], "Sz", "Sz"; sites = 1 : N)
+    @show Czz₀_initial[references[1], references[1] - 7 : references[1] + 7]
+    @show Czz₁_initial[references[1], references[1] - 7 : references[1] + 7]
+    # @show Czz₂_initial[references[1], references[1] - 7 : references[1] + 7]
    
-
-
-    # **************************************************************************************************************
-    # **************************************************************************************************************
-    """
-        Time evolution of the original and perturbed wave functions using TEBD algorithm
-        Compute time-dependent observables and correlation functions
-    """
-
-    # Pre-allocate arrays for time-dependent observables
-    time_steps = Int(ttotal / τ)
-    Sz  = [Matrix{ComplexF64}(undef, time_steps, N) for _ in 1:5]
-    Czz = [Matrix{ComplexF64}(undef, time_steps, N) for _ in 1:5]
-    chi = [Matrix{Int}(undef, time_steps, N - 1) for _ in 1:5]
-    
-    # Aliases for backward compatibility
-    Sz₀, Sz₁, Sz₂, Sz₃, Sz₄ = Sz
-    Czz₀, Czz₁, Czz₂, Czz₃, Czz₄ = Czz
-    chi₀, chi₁, chi₂, chi₃, chi₄ = chi
     
 
-    # Time evovle the original and perturbed wave functions
+    """
+        Time evovle the original and perturbed wave functions using TEBD algorithm
+        and compute time-dependent observables and correlation functions
+    """
     for t in 0 : τ : ttotal
         index = Int(round(t / τ)) + 1
         t ≈ ttotal && break
