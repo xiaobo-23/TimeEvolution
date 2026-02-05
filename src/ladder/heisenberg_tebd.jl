@@ -21,7 +21,7 @@ OMP_NUM_THREADS = 8
 
 
 # Define the model parameters as well as the time evolution parameters
-const Nx = 15
+const Nx = 50
 const Ny = 2
 const N = Nx * Ny - 2   # Total number of sites in the ladder lattice by removing the corner sites
 const J1 = 1.0
@@ -29,8 +29,8 @@ const J2 = 0.35
 const Jp=0.0
 const delta = 0.04
 const τ = 0.05
-const ttotal = 0.1
-const cutoff = 1E-10
+const ttotal = 100
+const cutoff = 1e-10
 
 
 let
@@ -124,17 +124,19 @@ let
     E, ψ = dmrg(Hamiltonian, ψ₀; nsweeps, maxdim, cutoff, eigsolve_krylovdim)
     Sz₀ = expect(ψ, "Sz"; sites=1:N)
     Czz₀ = correlation_matrix(ψ, "Sz", "Sz"; sites=1:N)
+    @show Sz₀
+    @show linkdims(ψ)
     println(repeat("=", 200))
 
 
-    # # Save the final wave functions and observables to an HDF5 file
-    # output_file = "../data/heisenberg_J2$(J2)_Jp$(Jp)_delta$(delta).h5" 
+    # Save the final wave functions and observables to an HDF5 file 
+    output_file = "../data/heisenberg_J2$(J2)_delta$(delta)_Jp$(Jp).h5" 
     
-    # h5open(output_file, "cw") do file
-    #     write(file, "energy", E)
-    #     write(file, "Sz", Sz₀)
-    #     write(file, "Czz", Czz₀)
-    # end
+    h5open(output_file, "cw") do file
+        write(file, "energy", E)
+        write(file, "Sz", Sz₀)
+        write(file, "Czz", Czz₀)
+    end
     # #**************************************************************************************************************
     # #************************************************************************************************************** 
 
@@ -248,9 +250,10 @@ let
     # Create perturbed copies of the ground state
     perturbed_psi = [deepcopy(ψ) for _ in 1:length(references)]
     
+    
     # Apply Sz perturbation to each copy at the corresponding reference site
     for (i, ref) in enumerate(references)
-        perturbation = op("Sx", s[ref])
+        perturbation = op("Sz", s[ref])
         perturbed_psi[i] = apply(perturbation, perturbed_psi[i]; cutoff)
         normalize!(perturbed_psi[i])
     end
@@ -260,121 +263,118 @@ let
     Sz₀ = expect(ψ, "Sz"; sites = 1 : N)
     Sz₁ = expect(perturbed_psi[1], "Sz"; sites = 1 : N)
     Sz₂ = expect(perturbed_psi[2], "Sz"; sites = 1 : N)
-    @show Sz₀[6 : 12]
-    @show Sz₁[6 : 12]
-    @show Sz₂[6 : 12]
+    @show Sz₀[references[1] - 7 : references[1] + 7]
+    @show Sz₁[references[1] - 7 : references[1] + 7]
+    @show Sz₂[references[1] - 7 : references[1] + 7]
 
 
     Czz₀ = correlation_matrix(ψ, "Sz", "Sz"; sites = 1 : N)
     Czz₁ = correlation_matrix(perturbed_psi[1], "Sz", "Sz"; sites = 1 : N)
-    Czz₂ = correlation_matrix(perturbed_psi[2], "Sz", "Sz"; sites = 1 : N)
-    @show Czz₀[6, 6 : 12]
-    @show Czz₁[6, 6 : 12]
-    @show Czz₂[6, 6 : 12]
+    # Czz₂ = correlation_matrix(perturbed_psi[2], "Sz", "Sz"; sites = 1 : N)
+    @show Czz₀[references[1], references[1] - 7 : references[1] + 7]
+    @show Czz₁[references[1], references[1] - 7 : references[1] + 7]
+    # @show Czz₂[references[1], references[1] - 7 : references[1] + 7]
     #**************************************************************************************************************
     #************************************************************************************************************** 
    
 
 
-    #**************************************************************************************************************
-    #**************************************************************************************************************
-    # Time evolve the original and perturbed wave functions and compute time-dependent physical observables
+    # **************************************************************************************************************
+    # **************************************************************************************************************
+    """
+        Time evolution of the original and perturbed wave functions using TEBD algorithm
+        Compute time-dependent observables and correlation functions
+    """
 
+    # Pre-allocate arrays for time-dependent observables
+    time_steps = Int(ttotal / τ)
+    Sz  = [Matrix{ComplexF64}(undef, time_steps, N) for _ in 1:5]
+    Czz = [Matrix{ComplexF64}(undef, time_steps, N) for _ in 1:5]
+    chi = [Matrix{Int}(undef, time_steps, N - 1) for _ in 1:5]
+    
+    # Aliases for backward compatibility
+    Sz₀, Sz₁, Sz₂, Sz₃, Sz₄ = Sz
+    Czz₀, Czz₁, Czz₂, Czz₃, Czz₄ = Czz
+    chi₀, chi₁, chi₂, chi₃, chi₄ = chi
+    
 
-    # # Initialize arrays to store time-dependent observables
-    # time_steps = Int(ttotal / τ)
-    # Sz₀ = Matrix{ComplexF64}(undef, time_steps, N)
-    # Sz₁ = Matrix{ComplexF64}(undef, time_steps, N)
-    # Sz₂ = Matrix{ComplexF64}(undef, time_steps, N)
-    # Sz₃ = Matrix{ComplexF64}(undef, time_steps, N)
-    # Sz₄ = Matrix{ComplexF64}(undef, time_steps, N)
-    # Czz₁ = Matrix{ComplexF64}(undef, time_steps, N)
-    # Czz₂ = Matrix{ComplexF64}(undef, time_steps, N)
-    # Czz₃ = Matrix{ComplexF64}(undef, time_steps, N)
-    # Czz₄ = Matrix{ComplexF64}(undef, time_steps, N)  
-    # chi₀ = Matrix{Int}(undef, time_steps, N - 1)  
-    # chi₁ = Matrix{Int}(undef, time_steps, N - 1)
-    # chi₂ = Matrix{Int}(undef, time_steps, N - 1)
-    # chi₃ = Matrix{Int}(undef, time_steps, N - 1)
-    # chi₄ = Matrix{Int}(undef, time_steps, N - 1)
-    # output_file = "heisenberg_tebd_time$(ttotal)_J2$(J2)_Jp$(Jp)_delta$(delta).h5"    
-
-
-
-    # # Time evovle the original and perturbed wave functions
-    # for t in 0 : τ : ttotal
-    #     index = Int(round(t / τ)) + 1
-    #     t ≈ ttotal && break
+    # Time evovle the original and perturbed wave functions
+    for t in 0 : τ : ttotal
+        index = Int(round(t / τ)) + 1
+        t ≈ ttotal && break
         
         
-    #     # Time evolve the unperturbed wave function
-    #     ψ = apply(gates, ψ; cutoff)
-    #     normalize!(ψ)
+        # Time evolve the unperturbed wave function
+        ψ = apply(gates, ψ; cutoff=cutoff, maxdim=1000)
+        normalize!(ψ)
              
-    #     for i in 1 : length(references)
-    #         perturbed_psi[i] = apply(gates, perturbed_psi[i]; cutoff)
-    #         normalize!(perturbed_psi[i])
-    #     end
-    #     @info "Time evolution" current_time=t+τ step=index total_steps=time_steps max_bond_dim=maximum(linkdims(ψ))
+        for i in 1 : length(references)
+            perturbed_psi[i] = apply(gates, perturbed_psi[i]; cutoff=cutoff, maxdim=1000)
+            normalize!(perturbed_psi[i])
+        end
+        @show "Time evolution" current_time=t+τ  
+        @show linkdims(ψ)
 
 
+        # Record time-dependent physical observables and bond dimensions
+        Sz₀[index, :] = expect(ψ, "Sz"; sites = 1 : N)
+        Sz₁[index, :] = expect(perturbed_psi[1], "Sz"; sites = 1 : N)
+        Sz₂[index, :] = expect(perturbed_psi[2], "Sz"; sites = 1 : N)
+        Sz₃[index, :] = expect(perturbed_psi[3], "Sz"; sites = 1 : N)
+        Sz₄[index, :] = expect(perturbed_psi[4], "Sz"; sites = 1 : N)
 
-    #     # Record time-dependent physical observables and bond dimensions
-    #     Sz₀[index, :] = expect(ψ, "Sz"; sites = 1 : N)
-    #     Sz₁[index, :] = expect(perturbed_psi[1], "Sz"; sites = 1 : N)
-    #     Sz₂[index, :] = expect(perturbed_psi[2], "Sz"; sites = 1 : N)
-    #     Sz₃[index, :] = expect(perturbed_psi[3], "Sz"; sites = 1 : N)
-    #     Sz₄[index, :] = expect(perturbed_psi[4], "Sz"; sites = 1 : N)
-
-    #     chi₀[index, :] = linkdims(ψ)
-    #     chi₁[index, :] = linkdims(perturbed_psi[1])
-    #     chi₂[index, :] = linkdims(perturbed_psi[2])
-    #     chi₃[index, :] = linkdims(perturbed_psi[3])
-    #     chi₄[index, :] = linkdims(perturbed_psi[4])
+        chi₀[index, :] = linkdims(ψ)
+        chi₁[index, :] = linkdims(perturbed_psi[1])
+        chi₂[index, :] = linkdims(perturbed_psi[2])
+        chi₃[index, :] = linkdims(perturbed_psi[3])
+        chi₄[index, :] = linkdims(perturbed_psi[4])
 
 
-    #     # Compute time-dependent correlation functions
-    #     for site_index in collect(1 : N)
-    #         measurement_os = OpSum()
-    #         measurement_os += "Sz", site_index
-    #         measurement_mpo = MPO(measurement_os, s)
+        # Compute time-dependent correlation functions
+        for site_index in collect(1 : N)
+            measurement_os = OpSum()
+            measurement_os += "Sz", site_index
+            measurement_mpo = MPO(measurement_os, s)
 
-    #         Czz₁[index, site_index] = inner(ψ', measurement_mpo, perturbed_psi[1])
-    #         Czz₂[index, site_index] = inner(ψ', measurement_mpo, perturbed_psi[2])
-    #         Czz₃[index, site_index] = inner(ψ', measurement_mpo, perturbed_psi[3])
-    #         Czz₄[index, site_index] = inner(ψ', measurement_mpo, perturbed_psi[4])
-    #     end
+            Czz₁[index, site_index] = inner(ψ', measurement_mpo, perturbed_psi[1])
+            Czz₂[index, site_index] = inner(ψ', measurement_mpo, perturbed_psi[2])
+            Czz₃[index, site_index] = inner(ψ', measurement_mpo, perturbed_psi[3])
+            Czz₄[index, site_index] = inner(ψ', measurement_mpo, perturbed_psi[4])
+        end
 
-    #     # Create/update HDF5 file using "cw" mode (create or read-write if exists)
-    #     h5open(output_file, "cw") do file
-    #         for (name, data) in [("Czz1", Czz₁), ("Czz2", Czz₂), ("Czz3", Czz₃), ("Czz4", Czz₄)]
-    #             haskey(file, name) && delete_object(file, name)
-    #             file[name] = data
-    #         end
-    #     end
-    # end
-    #**************************************************************************************************************
-    #**************************************************************************************************************
+        
+        # Create/update HDF5 file using "cw" mode (create or read-write if exists)
+        h5open(output_file, "cw") do file
+            for (name, data) in [("Czz1", Czz₁), ("Czz2", Czz₂), ("Czz3", Czz₃), ("Czz4", Czz₄)]
+                haskey(file, name) && delete_object(file, name)
+                file[name] = data
+            end
+        end
+    end
+    # **************************************************************************************************************
+    # **************************************************************************************************************
     
 
     
-    # # Save the final wave functions and observables to an HDF5 file
-    # h5open(output_file, "cw") do file
-    #     write(file, "Psi0", ψ)
-    #     write(file, "Psi1", perturbed_psi[1])
-    #     write(file, "Psi2", perturbed_psi[2])
-    #     write(file, "Psi3", perturbed_psi[3])
-    #     write(file, "Psi4", perturbed_psi[4])
-    #     write(file, "Sz0", Sz₀)
-    #     write(file, "Sz1", Sz₁)
-    #     write(file, "Sz2", Sz₂)
-    #     write(file, "Sz3", Sz₃)
-    #     write(file, "Sz4", Sz₄)
-    #     write(file, "chi0", chi₀)
-    #     write(file, "chi1", chi₁)
-    #     write(file, "chi2", chi₂)
-    #     write(file, "chi3", chi₃)
-    #     write(file, "chi4", chi₄)
-    # end
+    # Save the final wave functions and observables to an HDF5 file
+    h5open(output_file, "cw") do file
+        write(file, "Psi0", ψ)
+        write(file, "Psi1", perturbed_psi[1])
+        write(file, "Psi2", perturbed_psi[2])
+        write(file, "Psi3", perturbed_psi[3])
+        write(file, "Psi4", perturbed_psi[4])
+        write(file, "Sz0", Sz₀)
+        write(file, "Sz1", Sz₁)
+        write(file, "Sz2", Sz₂)
+        write(file, "Sz3", Sz₃)
+        write(file, "Sz4", Sz₄)
+        write(file, "chi0", chi₀)
+        write(file, "chi1", chi₁)
+        write(file, "chi2", chi₂)
+        write(file, "chi3", chi₃)
+        write(file, "chi4", chi₄)
+    end
+
+
     return
 end
