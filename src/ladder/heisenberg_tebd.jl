@@ -8,7 +8,7 @@ using MKL
 using HDF5
 
 
-include("../lattice.jl")
+include("lattice.jl")
 
 
 # Set up the number of threads for parallel computing 
@@ -28,8 +28,8 @@ const J1 = 1.0
 const J2 = 0.35
 const Jp=0.0
 const delta = 0.04
-const τ = 0.05
-const ttotal = 100
+const τ = 0.1
+const ttotal = 100.0
 const cutoff = 1e-10
 
 
@@ -119,7 +119,7 @@ let
     println("\n" * repeat("=", 200))
     println("Running DMRG algorithms to obtain the ground state of the J₁-J₂-δ Heisenberg ladder model...")
     println(repeat("=", 200))
-    nsweeps = 2
+    nsweeps = 15
     maxdim = [20, 50, 200, 1000]
     eigsolve_krylovdim = 50
     E, ψ = dmrg(Hamiltonian, ψ₀; nsweeps, maxdim, cutoff, eigsolve_krylovdim)
@@ -177,9 +177,9 @@ let
     hj = 0.5 * J1 * (1 + delta) * op("S+", s₁) * op("S-", s₂) + 0.5 * J1 * (1 + delta) * op("S-", s₁) * op("S+", s₂) + J1 * (1 + delta) * op("Sz", s₁) * op("Sz", s₂)
     Gj = exp(-im * τ/2 * hj)
     push!(gates, Gj)
-    @info "Two-qubit gate for nearest-neighbor bond added" site1=1 site2=2 J1=J1*(1+delta)
+    # @info "Two-qubit gate for nearest-neighbor bond added" site1=1 site2=2 J1=J1*(1+delta)
 
-    for offset in [3, 2]
+    for offset in [3, 2, 4]
         for index in offset : 3 : N - 2
             # Check the largest index to avoid out-of-bound error
             if index + 2 > N 
@@ -198,7 +198,7 @@ let
             hj = 0.5 * J_effective * op("S+", s₁) * op("S-", s₂) + 0.5 * J_effective * op("S-", s₁) * op("S+", s₂) + J_effective * op("Sz", s₁) * op("Sz", s₂)
             Gj = exp(-im * τ/2 * hj)
             push!(gates, Gj)
-            @info "Two-qubit gate for nearest-neighbor bond added" site1=index site2=index+2 J=J_effective
+            # @info "Two-qubit gate for nearest-neighbor bond added" site1=index site2=index+2 J=J_effective
         end
     end
 
@@ -212,7 +212,7 @@ let
     push!(gates, Gj)
     # @info "Two-qubit gate for next-nearest-neighbor bond added" site1=1 site2=4 J=J2
 
-    starting_points = [5, 2, 3, 4]
+    starting_points = [5, 2, 3, 4, 6]
 
     for offset in starting_points
         for index in offset : 5 : N - 4
@@ -267,8 +267,9 @@ let
     # Define four reference sites at the center of the ladder lattice
     center = div(N, 2)
     references = iseven(center) ? (center:center+3) : (center-1:center+2)
-    @show references
-    
+    println("\nReference sites for local perturbations")
+    @show references=references
+
     
     # Create perturbed copies of the ground state
     perturbed_psi = [deepcopy(ψ) for _ in 1:length(references)]
@@ -286,16 +287,19 @@ let
     Sz₀_initial = expect(ψ, "Sz"; sites = 1 : N)
     Sz₁_initial = expect(perturbed_psi[1], "Sz"; sites = 1 : N)
     Sz₂_initial = expect(perturbed_psi[2], "Sz"; sites = 1 : N)
+    println("")
     @show Sz₀_initial[references[1] - 7 : references[1] + 7]
+    println("")
     @show Sz₁_initial[references[1] - 7 : references[1] + 7]
+    println("")
     @show Sz₂_initial[references[1] - 7 : references[1] + 7]
 
 
     Czz₀_initial = correlation_matrix(ψ, "Sz", "Sz"; sites = 1 : N)
     Czz₁_initial = correlation_matrix(perturbed_psi[1], "Sz", "Sz"; sites = 1 : N)
     # Czz₂_initial = correlation_matrix(perturbed_psi[2], "Sz", "Sz"; sites = 1 : N)
-    @show Czz₀_initial[references[1], references[1] - 7 : references[1] + 7]
-    @show Czz₁_initial[references[1], references[1] - 7 : references[1] + 7]
+    # @show Czz₀_initial[references[1], references[1] - 7 : references[1] + 7]
+    # @show Czz₁_initial[references[1], references[1] - 7 : references[1] + 7]
     # @show Czz₂_initial[references[1], references[1] - 7 : references[1] + 7]
    
     
