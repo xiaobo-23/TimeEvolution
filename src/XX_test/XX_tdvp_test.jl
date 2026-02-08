@@ -11,11 +11,9 @@ using Random
 
 
 # Set up the parameters used in the simulation
-const N = 50                 # number of sites     
+const N = 20                 # number of sites     
 const ttotal = 1.0           # total time of evolution 
 const J₁ = 1.0               # nearest-neighbor interaction strength
-# const J₂ = 0.5               # next-nearest-neighbor interaction strength
-# const Δ = 0.2                # dimerization parameter   
 
 
 function main()    
@@ -27,7 +25,9 @@ function main()
   println("")
 
 
-  
+  """
+    Running DMRG to obtain the ground-state wave function and energy
+  """ 
   # Define the spin sites in an MPS
   s = siteinds("S=1/2", N)
   # os = heisenberg_dimerized(N; J1=J₁, J2=J₂, Δ=Δ)
@@ -47,7 +47,7 @@ function main()
   Random.seed!(1234567)
   ψ₀ = random_mps(s, "↑"; linkdims=10)
   sz₀ = expect(ψ₀, "Sz"; sites=1:N)
-  # @show inner(ψ', H, ψ) / inner(ψ, ψ)
+  # @show inner(ψ₀', H, ψ₀) / inner(ψ₀, ψ₀)
 
   
   # Running DMRG to obtain the ground-state wave function and energy 
@@ -55,8 +55,8 @@ function main()
   println("Running DMRG to obtain the ground-state wave function and energy...")
   e0, ϕ0 = dmrg(H, ψ₀; nsweeps=10, maxdim=200, cutoff=1e-10)
   @show e0 
-  # @show inner(ϕ0', H, ϕ0) / inner(ϕ0, ϕ0)
-  # Sz₀ = expect(ϕ0, "Sz"; sites=1:n)
+  @show inner(ϕ0', H, ϕ0) / inner(ϕ0, ϕ0)
+  # Sz₀ = expect(ϕ0, "Sz"; sites=1:N)
   # @show Sz₀
   println(repeat("#", 200))
   println("")
@@ -70,8 +70,11 @@ function main()
   # end
 
   
-  # Running TDVP to obtain the ground-state wave function and energy
-  init = MPS(s, n -> isodd(n) ? "Up" : "Dn")
+  """
+    Running TDVP to time evolve the initial wave function along imaginary-time axis to obtain the ground-state wave function and energy
+  """
+  
+  # init = MPS(s, n -> isodd(n) ? "Up" : "Dn")
   
   # measure_os = [[("Id") for idx in 1:n] for idx in 1:n]
   # for i in 1:n
@@ -88,7 +91,7 @@ function main()
 
 
   println(repeat("#", 200))
-  println("Running TDVP to time evolve the wave function...")
+  println("Running TDVP to time evolve the wave function along imaginary time axis...")
   step(; sweep) = sweep
   current_time(; current_time) = current_time
   return_state(; state) = state
@@ -103,10 +106,10 @@ function main()
   # Running TDVP along the imaginary time direction to obtain the ground-state wave function
   ϕ = tdvp(
     H,
-    -20.0,
+    -30.0,
     ψ₀;
-    nsteps=20,
-    maxdim=100,
+    nsteps=30,
+    maxdim=300,
     cutoff=1e-10,
     normalize=true,
     outputlevel=1,
@@ -114,35 +117,32 @@ function main()
     (observer!)=obs,
   )
   @show inner(ϕ', H, ϕ) / inner(ϕ, ϕ)
-  println(repeat("#", 200))
-  println("")
-
-    
-  # println("\nCompare Results of the Imaginary-Time Evolution")
-  # println(repeat("#", 200))
-  # for idx in 1:length(obs.steps)
-  #   println("step = ", obs.steps[idx])
-  #   println(", time = ", round(obs.times[idx]; digits=3))
-  #   println(", |⟨ψⁿ|ψⁱ⟩| = ", round(abs(inner(obs.states[idx], ψ)); digits=3))
-  #   println(", |⟨ψⁿ|ψᶠ⟩| = ", round(abs(inner(obs.states[idx], ϕ)); digits=3))
-  #   print(", ⟨Sᶻ⟩ = ", length(obs.sz[idx]))
-  #   # print(", ⟨Sᶻ(t)Sᶻ(0)⟩ size ", length(obs.sz_time[idx]))
-  #   # print(", ⟨Sᶻ(t)Sᶻ(0)⟩ = ", obs.sz_time[idx])
-  #   println(", ⟨Czz⟩ size ", length(obs.czz[idx]))
-  #   println()
-  # end
-  
-  # # for idx in 1:length(obs.sz)
-  # #   print("step = ", idx)
-  # #   print(", ⟨Sᶻ⟩ = ", obs.sz[idx])
-  # #   println()
-  # # end
-
   # println(repeat("#", 200))
   # println("")
+
+    
+  println("\nCompare Results of the Imaginary-Time Evolution")
+  # println(repeat("#", 200))
+  # @show length(obs.steps)
+  # @show length(obs.times)
+  # @show obs.times
+
+  
+  for idx in 1:length(obs.steps)
+    println("step = ", obs.steps[idx])
+    println(", time = ", round(obs.times[idx]; digits=3))
+    # println(", |⟨ψⁿ|ψⁱ⟩| = ", round(abs(inner(obs.states[idx], ψ₀)); digits=3))
+    # println(", |⟨ψⁿ|ψᶠ⟩| = ", round(abs(inner(obs.states[idx], ϕ)); digits=3))
+    println(", ⟨H⟩ = ", round(inner(obs.states[idx]', H, obs.states[idx]) / inner(obs.states[idx], obs.states[idx]); digits=8))
+    # print(", ⟨Sᶻ⟩ = ", length(obs.sz[idx]))
+    # print(", ⟨Sᶻ(t)Sᶻ(0)⟩ size ", length(obs.sz_time[idx]))
+    # print(", ⟨Sᶻ(t)Sᶻ(0)⟩ = ", obs.sz_time[idx])
+    # println(", ⟨Czz⟩ size ", length(obs.czz[idx]))
+    println("")
+  end
   
 
-  # sz₁ = Matrix{Float64}(undef, length(obs.sz), n)
+  # sz₁ = Matrix{Float64}(undef, length(obs.sz), N)
   # for idx in 1:length(obs.sz)
   #   sz₁[idx, :] = obs.sz[idx]
   # end
@@ -150,7 +150,7 @@ function main()
   # @show obs.sz[1]
 
 
-  # czz₁ = Matrix{Float64}(undef, length(obs.sz), n*n)
+  # czz₁ = Matrix{Float64}(undef, length(obs.sz), N*N)
   # for idx in 1:length(obs.sz)
   #   czz₁[idx, :] = obs.czz[idx]
   # end
@@ -165,10 +165,17 @@ function main()
   #     write(file, "sz", sz₁)
   #     write(file, "czz", czz₁)
   # end
+   
+  println(repeat("#", 200))
+  println("")
+  
+  
   
   
   # println(repeat("#", 200))
-  # println("Running TDVP to evolve the wave function in real time axis...")
+  """
+    Running TDVP to time evolve the initial wave function along real-time axis to obtain the time-evolved wave function and energy
+  """
   
   # # Apply local perturbations to the ground-state wave function
   # ϕ_copy = deepcopy(ϕ0)
@@ -178,22 +185,22 @@ function main()
   # normalize!(ϕ_copy)
   
 
-  # # Running TDVP along the imaginary time direction to obtain the ground-state wave function
-  # ϕ_final = tdvp(
-  #   H,
-  #   -10im,
-  #   init;
-  #   nsteps=50,
-  #   maxdim=200,
-  #   cutoff=1e-10,
-  #   normalize=true,
-  #   outputlevel=1,
-  #   nsite=2,
-  #   (observer!)=obs,
-  # )
-  # @show inner(ϕ_final', H, ϕ_final) / inner(ϕ_final, ϕ_final)
-  # println(repeat("#", 200))
-  # println("")
+  # Running TDVP along the imaginary time direction to obtain the ground-state wave function
+  ϕ_final = tdvp(
+    H,
+    -10im,
+    init;
+    nsteps=50,
+    maxdim=200,
+    cutoff=1e-10,
+    normalize=true,
+    outputlevel=1,
+    nsite=2,
+    (observer!)=obs,
+  )
+  @show inner(ϕ_final', H, ϕ_final) / inner(ϕ_final, ϕ_final)
+  println(repeat("#", 200))
+  println("")
 
   
   # println("\nCompare Results of the Real-Time Evolution")
