@@ -25,6 +25,8 @@ function main()
   println("")
 
 
+  #***********************************************************************************************************************************
+  #*********************************************************************************************************************************** 
   """
     Running DMRG to obtain the ground-state wave function and energy
   """ 
@@ -68,30 +70,131 @@ function main()
   #   write(file, "E0", e0)
   #   write(file, "Psi", ϕ0)
   # end
+  #***********************************************************************************************************************************
+  #*********************************************************************************************************************************** 
 
   
-  """
-    Running TDVP to time evolve the initial wave function along imaginary-time axis to obtain the ground-state wave function and energy
-  """
+  #***********************************************************************************************************************************
+  #*********************************************************************************************************************************** 
+  # """
+  #   Running TDVP to time evolve the initial wave function along imaginary-time axis to obtain the ground-state wave function and energy
+  # """
   
-  # init = MPS(s, n -> isodd(n) ? "Up" : "Dn")
+  # # init = MPS(s, n -> isodd(n) ? "Up" : "Dn")
   
-  # measure_os = [[("Id") for idx in 1:n] for idx in 1:n]
-  # for i in 1:n
-  #   measure_os[i][i] = "Sz"
+  # # measure_os = [[("Id") for idx in 1:n] for idx in 1:n]
+  # # for i in 1:n
+  # #   measure_os[i][i] = "Sz"
+  # # end
+  # # @show measure_os
+  # # # measure_mpo = ops(measure_os, s)
+  
+  # # measure_mpo = []
+  # # for idx in 1:n
+  # #   push!(measure_mpo, MPO(s, measure_os[idx]))
+  # # end
+  # # @show measure_mpo
+
+
+  # println(repeat("#", 200))
+  # println("Running TDVP to time evolve the wave function along imaginary time axis...")
+  # step(; sweep) = sweep
+  # current_time(; current_time) = current_time
+  # return_state(; state) = state
+  # measure_sz(; state) = expect(state, "Sz"; sites = 1:N)
+  # measure_czz(; state) = correlation_matrix(state, "Sz", "Sz"; sites = 1:N)
+  # # measure_unequal_sz(; state) = [inner(ψ', MPO(s, "Sz"), state) for idx in 1:n]
+  # # measure_unequal_sz(; state) = [inner(state', tmp_mpo, ψ) for tmp_mpo in measure_mpo]
+  # # obs = observer("steps" => step, "times" => current_time, "states" => return_state, "sz" => measure_sz, "sz_time" => measure_unequal_sz)
+  # obs = observer("steps" => step, "times" => current_time, "states" => return_state, "sz" => measure_sz, "czz" => measure_czz)
+  
+
+  # # Running TDVP along the imaginary time direction to obtain the ground-state wave function
+  # ϕ = tdvp(
+  #   H,
+  #   -30.0,
+  #   ψ₀;
+  #   nsteps=30,
+  #   maxdim=300,
+  #   cutoff=1e-10,
+  #   normalize=true,
+  #   outputlevel=1,
+  #   nsite=2,
+  #   (observer!)=obs,
+  # )
+  # @show inner(ϕ', H, ϕ) / inner(ϕ, ϕ)
+  # # println(repeat("#", 200))
+  # # println("")
+
+    
+  # println("\nCompare Results of the Imaginary-Time Evolution")
+  # println(repeat("#", 200))
+  # @show length(obs.steps)
+  # @show length(obs.times)
+  # @show obs.times
+
+  
+  # for idx in 1:length(obs.steps)
+  #   println("step = ", obs.steps[idx])
+  #   println(", time = ", round(obs.times[idx]; digits=3))
+  #   # println(", |⟨ψⁿ|ψⁱ⟩| = ", round(abs(inner(obs.states[idx], ψ₀)); digits=3))
+  #   # println(", |⟨ψⁿ|ψᶠ⟩| = ", round(abs(inner(obs.states[idx], ϕ)); digits=3))
+  #   println(", ⟨H⟩ = ", round(inner(obs.states[idx]', H, obs.states[idx]) / inner(obs.states[idx], obs.states[idx]); digits=8))
+  #   # print(", ⟨Sᶻ⟩ = ", length(obs.sz[idx]))
+  #   # print(", ⟨Sᶻ(t)Sᶻ(0)⟩ size ", length(obs.sz_time[idx]))
+  #   # print(", ⟨Sᶻ(t)Sᶻ(0)⟩ = ", obs.sz_time[idx])
+  #   # println(", ⟨Czz⟩ size ", length(obs.czz[idx]))
+  #   println("")
   # end
-  # @show measure_os
-  # # measure_mpo = ops(measure_os, s)
   
-  # measure_mpo = []
-  # for idx in 1:n
-  #   push!(measure_mpo, MPO(s, measure_os[idx]))
-  # end
-  # @show measure_mpo
+
+  # # sz₁ = Matrix{Float64}(undef, length(obs.sz), N)
+  # # for idx in 1:length(obs.sz)
+  # #   sz₁[idx, :] = obs.sz[idx]
+  # # end
+  # # @show sz₁[1, :]
+  # # @show obs.sz[1]
 
 
+  # # czz₁ = Matrix{Float64}(undef, length(obs.sz), N*N)
+  # # for idx in 1:length(obs.sz)
+  # #   czz₁[idx, :] = obs.czz[idx]
+  # # end
+  # # @show czz₁[length(obs.czz), :]
+  # # @show obs.czz[length(obs.czz)]
+
+
+  # # # Save the TDVP results into an HDF5 file
+  # # h5open(output_filename, "cw") do file
+  # #     write(file, "steps", obs.steps)
+  # #     write(file, "time", round.(obs.times, digits=3))
+  # #     write(file, "sz", sz₁)
+  # #     write(file, "czz", czz₁)
+  # # end
+   
+  # println(repeat("#", 200))
+  # println("")
+  #***********************************************************************************************************************************
+  #*********************************************************************************************************************************** 
+  
+  
+  #***********************************************************************************************************************************
+  #*********************************************************************************************************************************** 
+  """
+    Running TDVP to time evolve the initial wave function along real-time axis to obtain the time-evolved wave function and energy
+  """
+  
+  # Apply a local pertubation to the intiial wave function, and then time evolve the perturbed wave function
+  ϕ_copy = deepcopy(ϕ0)
+  reference = div(N, 2)
+  perturbation = op("Sz", s[reference])
+  ϕ_copy = apply(perturbation, ϕ_copy; cutoff=1e-10)  
+  normalize!(ϕ_copy)
+  
+  
+  
   println(repeat("#", 200))
-  println("Running TDVP to time evolve the wave function along imaginary time axis...")
+  println("Running TDVP to time evolve the wave function along real time axis...")
   step(; sweep) = sweep
   current_time(; current_time) = current_time
   return_state(; state) = state
@@ -101,97 +204,15 @@ function main()
   # measure_unequal_sz(; state) = [inner(state', tmp_mpo, ψ) for tmp_mpo in measure_mpo]
   # obs = observer("steps" => step, "times" => current_time, "states" => return_state, "sz" => measure_sz, "sz_time" => measure_unequal_sz)
   obs = observer("steps" => step, "times" => current_time, "states" => return_state, "sz" => measure_sz, "czz" => measure_czz)
-  
 
-  # Running TDVP along the imaginary time direction to obtain the ground-state wave function
-  ϕ = tdvp(
-    H,
-    -30.0,
-    ψ₀;
-    nsteps=30,
-    maxdim=300,
-    cutoff=1e-10,
-    normalize=true,
-    outputlevel=1,
-    nsite=2,
-    (observer!)=obs,
-  )
-  @show inner(ϕ', H, ϕ) / inner(ϕ, ϕ)
-  # println(repeat("#", 200))
-  # println("")
-
-    
-  println("\nCompare Results of the Imaginary-Time Evolution")
-  # println(repeat("#", 200))
-  # @show length(obs.steps)
-  # @show length(obs.times)
-  # @show obs.times
-
-  
-  for idx in 1:length(obs.steps)
-    println("step = ", obs.steps[idx])
-    println(", time = ", round(obs.times[idx]; digits=3))
-    # println(", |⟨ψⁿ|ψⁱ⟩| = ", round(abs(inner(obs.states[idx], ψ₀)); digits=3))
-    # println(", |⟨ψⁿ|ψᶠ⟩| = ", round(abs(inner(obs.states[idx], ϕ)); digits=3))
-    println(", ⟨H⟩ = ", round(inner(obs.states[idx]', H, obs.states[idx]) / inner(obs.states[idx], obs.states[idx]); digits=8))
-    # print(", ⟨Sᶻ⟩ = ", length(obs.sz[idx]))
-    # print(", ⟨Sᶻ(t)Sᶻ(0)⟩ size ", length(obs.sz_time[idx]))
-    # print(", ⟨Sᶻ(t)Sᶻ(0)⟩ = ", obs.sz_time[idx])
-    # println(", ⟨Czz⟩ size ", length(obs.czz[idx]))
-    println("")
-  end
-  
-
-  # sz₁ = Matrix{Float64}(undef, length(obs.sz), N)
-  # for idx in 1:length(obs.sz)
-  #   sz₁[idx, :] = obs.sz[idx]
-  # end
-  # @show sz₁[1, :]
-  # @show obs.sz[1]
-
-
-  # czz₁ = Matrix{Float64}(undef, length(obs.sz), N*N)
-  # for idx in 1:length(obs.sz)
-  #   czz₁[idx, :] = obs.czz[idx]
-  # end
-  # @show czz₁[length(obs.czz), :]
-  # @show obs.czz[length(obs.czz)]
-
-
-  # # Save the TDVP results into an HDF5 file
-  # h5open(output_filename, "cw") do file
-  #     write(file, "steps", obs.steps)
-  #     write(file, "time", round.(obs.times, digits=3))
-  #     write(file, "sz", sz₁)
-  #     write(file, "czz", czz₁)
-  # end
-   
-  println(repeat("#", 200))
-  println("")
-  
-  
-  
-  
-  # println(repeat("#", 200))
-  """
-    Running TDVP to time evolve the initial wave function along real-time axis to obtain the time-evolved wave function and energy
-  """
-  
-  # # Apply local perturbations to the ground-state wave function
-  # ϕ_copy = deepcopy(ϕ0)
-  # reference = div(n, 2)
-  # local_perturbation = op("Sz", s[reference])
-  # ϕ_copy = apply(local_perturbation, ϕ_copy; cutoff=1e-12)  
-  # normalize!(ϕ_copy)
-  
 
   # Running TDVP along the imaginary time direction to obtain the ground-state wave function
   ϕ_final = tdvp(
     H,
-    -10im,
-    init;
-    nsteps=50,
-    maxdim=200,
+    -2im,
+    ϕ_copy;
+    nsteps=20,
+    maxdim=500,
     cutoff=1e-10,
     normalize=true,
     outputlevel=1,
@@ -234,6 +255,8 @@ function main()
   # end
   # # @show czz₂[length(obs.czz), :]
   # # @show obs.czz[length(obs.czz)]
+  #***********************************************************************************************************************************
+  #*********************************************************************************************************************************** 
 
 
   # # Save the TDVP results into an HDF5 file

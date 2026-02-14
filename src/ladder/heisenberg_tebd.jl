@@ -255,9 +255,7 @@ let
         Compute time-dependent observables and correlation functions
     """
 
-    """
-        Pre-allocate arrays for time-dependent observables
-    """
+    # Pre-allocate arrays for time-dependent observables and bond dimensions
     time_steps = Int(ttotal / τ)
     Sz  = [Matrix{ComplexF64}(undef, time_steps, N) for _ in 1:5]
     Czz = [Matrix{ComplexF64}(undef, time_steps, N) for _ in 1:5]
@@ -274,6 +272,7 @@ let
     # ψ = randomMPS(s, states; linkdims = 50)       # Initialize a random MPS
     # ψ = MPS(s, n -> isodd(n) ? "Up" : "Dn") 
 
+
     # Define four reference sites at the center of the ladder lattice
     center = div(N, 2)
     references = iseven(center) ? (center:center+3) : (center-1:center+2)
@@ -283,9 +282,6 @@ let
     
     # Create perturbed copies of the ground state
     perturbed_psi = [deepcopy(ψ) for _ in 1:length(references)]
-    
-    
-    # Apply Sz perturbation to each copy at the corresponding reference site
     for (i, ref) in enumerate(references)
         perturbation = op("Sz", s[ref])
         perturbed_psi[i] = apply(perturbation, perturbed_psi[i]; cutoff)
@@ -297,12 +293,12 @@ let
     Sz₀_initial = expect(ψ, "Sz"; sites = 1 : N)
     Sz₁_initial = expect(perturbed_psi[1], "Sz"; sites = 1 : N)
     Sz₂_initial = expect(perturbed_psi[2], "Sz"; sites = 1 : N)
-    println("")
-    @show Sz₀_initial[references[1] - 7 : references[1] + 7]
-    println("")
-    @show Sz₁_initial[references[1] - 7 : references[1] + 7]
-    println("")
-    @show Sz₂_initial[references[1] - 7 : references[1] + 7]
+    # println("")
+    # @show Sz₀_initial[references[1] - 7 : references[1] + 7]
+    # println("")
+    # @show Sz₁_initial[references[1] - 7 : references[1] + 7]
+    # println("")
+    # @show Sz₂_initial[references[1] - 7 : references[1] + 7]
 
 
     Czz₀_initial = correlation_matrix(ψ, "Sz", "Sz"; sites = 1 : N)
@@ -313,7 +309,6 @@ let
     # @show Czz₂_initial[references[1], references[1] - 7 : references[1] + 7]
    
     
-
     """
         Time evovle the original and perturbed wave functions using TEBD algorithm
         and compute time-dependent observables and correlation functions
@@ -331,9 +326,7 @@ let
             perturbed_psi[i] = apply(gates, perturbed_psi[i]; cutoff=cutoff, maxdim=1000)
             normalize!(perturbed_psi[i])
         end
-        @show "Time evolution" current_time=t+τ  
-        @show linkdims(ψ)
-
+        
 
         # Record time-dependent physical observables and bond dimensions
         Sz₀[index, :] = expect(ψ, "Sz"; sites = 1 : N)
@@ -347,6 +340,12 @@ let
         chi₂[index, :] = linkdims(perturbed_psi[2])
         chi₃[index, :] = linkdims(perturbed_psi[3])
         chi₄[index, :] = linkdims(perturbed_psi[4])
+
+
+        @show current_time=t+τ  
+        @show chi₀[index, :]
+        @show chi₁[index, :]
+        println("")
 
 
         # Compute time-dependent correlation functions
