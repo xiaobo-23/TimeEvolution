@@ -115,32 +115,42 @@ let
     # ψ₀ = MPS(s, n -> isodd(n) ? "Up" : "Dn")  # Initialize a prodcut state 
 
 
-    # Define parameters that are used in the DMRG optimization process
+    # Define hyperparameters used in DMRG
     println("\n" * repeat("=", 200))
     println("Running DMRG algorithms to obtain the ground state of the J₁-J₂-δ Heisenberg ladder model...")
     println(repeat("=", 200))
     nsweeps = 15
     maxdim = [20, 50, 200, 1000]
     eigsolve_krylovdim = 50
+    
+    
+    # Running DMRG to obtain the ground state wave function and compute physical observables
     E, ψ = dmrg(Hamiltonian, ψ₀; nsweeps, maxdim, cutoff, eigsolve_krylovdim)
     Sz₀ = expect(ψ, "Sz"; sites=1:N)
-    Czz₀ = correlation_matrix(ψ, "Sz", "Sz"; sites=1:N)
+    Czz₀ = correlation_matrix(ψ, "Sz", "Sz"; sites=1:N)    
+
+    println("")
+    println("\nOne-point function ⟨Sz⟩ of the ground state:")
     @show Sz₀
+    
+    println("\nBond dimension profile of the ground-state MPS:")
     @show linkdims(ψ)
     println(repeat("=", 200))
 
 
-    # Save the final wave functions and observables to an HDF5 file 
+    # Save the ground-state data to an HDF5 file 
     output_file = "../data/heisenberg_J2$(J2)_delta$(delta)_Jp$(Jp).h5" 
     
     h5open(output_file, "cw") do file
-        write(file, "energy", E)
-        write(file, "Sz", Sz₀)
-        write(file, "Czz", Czz₀)
+        for name in ["energy", "Sz₀", "Czz₀", "energy_variance"]
+            haskey(file, name) && delete_object(file, name)
+        end
+        file["energy"] = E
+        file["Sz₀"] = Sz₀
+        file["Czz₀"] = Czz₀
     end
-    # #**************************************************************************************************************
-    # #************************************************************************************************************** 
-
+    #**************************************************************************************************************
+    #************************************************************************************************************** 
 
 
    
